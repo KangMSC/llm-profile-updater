@@ -9,23 +9,28 @@ const client = axios.create({
   },
 });
 
-async function generateCharacterProfile(characterName, memories) {
+async function updateCharacterProfile(characterName, memories, existingProfileJson) {
   const prompt = `
-    다음은 스카이림 세계의 캐릭터 '${characterName}'에 대한 기억들입니다.
-    이 기억들을 바탕으로, 상세한 캐릭터 프로필을 생성해주세요.
-    프로필에는 캐릭터의 성격, 최근 경험, 그리고 주요 관계가 포함되어야 합니다.
+Here is the existing JSON profile for the character '${characterName}':
 
-    기억들:
-    ${memories.map(mem => `- ${mem.content}`).join('\n')}
+\
+${existingProfileJson}
+\
 
-    생성된 프로필:
+Here are the new memories for this character since the last update:
+
+${memories.map(mem => `- ${mem.content}`).join('\n')}
+
+Based on these new memories, update the values for the 'summary', 'appearance', and 'likesAndDislikes' keys in the JSON profile.
+If a value doesn't need changing, keep the original.
+Output the complete, updated JSON object.
   `;
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant who generates character profiles based on memories. Please respond in Korean.' },
+        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile based on new memories. You must only output the raw, updated JSON object, and nothing else. Do not wrap the JSON in markdown ```json ... ```.' },
         { role: 'user', content: prompt },
       ],
     });
@@ -37,6 +42,5 @@ async function generateCharacterProfile(characterName, memories) {
 }
 
 module.exports = {
-  generateCharacterProfile,
+  updateCharacterProfile,
 };
-
