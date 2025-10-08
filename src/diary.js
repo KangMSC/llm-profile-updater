@@ -44,8 +44,14 @@ async function processCharacterForDiary(actorName) {
 
         try {
           const diaryDate = getDiaryDate(events);
-          const diaryFileName = `${actorName}_${diaryDate}.md`;
-          const diaryPath = path.join(DIARIES_DIR, diaryFileName);
+          // Use a simpler filename, as the character name is now part of the directory path
+          const diaryFileName = `${diaryDate}.html`;
+          const characterDiaryDir = path.join(DIARIES_DIR, actorName);
+
+          // Create character-specific directory if it doesn't exist
+          await fs.mkdir(characterDiaryDir, { recursive: true });
+
+          const diaryPath = path.join(characterDiaryDir, diaryFileName);
 
           const diaryContent = await llm.generateCharacterDiary(actorName, events);
           
@@ -54,8 +60,7 @@ async function processCharacterForDiary(actorName) {
               return resolve();
           }
 
-          const fileHeader = `> **${actorName}'s Diary**\n> **Date:** ${diaryDate.replace(/_/g, ' ' )}\n\n---\n\n`;
-          await fs.writeFile(diaryPath, fileHeader + diaryContent, 'utf-8');
+          await fs.writeFile(diaryPath, diaryContent, 'utf-8');
           console.log(`[Diary] Saved diary for ${actorName} to ${diaryPath}`);
 
         } catch (error) {
@@ -95,4 +100,8 @@ async function main() {
   console.log('[Diary] Diary generation complete. Shutting down.');
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { processCharacterForDiary };

@@ -26,11 +26,11 @@ function getActorUUID(actorName, callback) {
   });
 }
 
-function getCharacterMemories(actorUUID, callback) {
-  const query = `SELECT * FROM memories WHERE actor_uuid = ? ORDER BY creation_time DESC`;
+function getCharacterEvents(actorUUID, callback) {
+  const query = `SELECT * FROM events WHERE originating_actor_UUID = ? ORDER BY game_time DESC`;
   db.all(query, [actorUUID], (err, rows) => {
     if (err) {
-      console.error('Error fetching memories:', err.message);
+      console.error('Error fetching events:', err.message);
       return callback(err, null);
     }
     callback(null, rows);
@@ -106,7 +106,7 @@ function close() {
 module.exports = {
   connect,
   getActorUUID,
-  getCharacterMemories,
+  getCharacterEvents,
   getEventsForDiary,
   close,
 };
