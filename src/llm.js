@@ -23,8 +23,23 @@ async function updateCharacterProfile(characterName, events, existingProfileJson
     return `- ${eventDetails}`;
   }).join('\n\n');
 
+  // --- Global Rules ---
+  const globalRules = [
+    'For the fields `summary`, `interject_summary`, `personality`, `occupation`, `skills`, and `speech_style`, do not just add new text. Subtly modify the existing content only if the new events cause a significant change. Keep descriptions concise.',
+    'The `background` field MUST NOT be changed. Keep its original value.',
+    'Only update the `appearance` field if events explicitly mention a change in equipment (e.g., new armor) or visible physical state (e.g., injury).'
+  ];
+
+  // Programmatically add the relationship rule if no specific instruction is given
+  if (!instructions || !instructions.relationships) {
+    globalRules.push('The `relationships` field MUST NOT be changed. Keep its original value as no specific instructions were provided for it.');
+  }
+
+  const globalRulesString = `\n\n**GLOBAL RULES**\nYou must follow these global rules for updating the profile:\n- ${globalRules.join('\n- ')}`;
+
+  // --- Character-Specific Instructions ---
   const instructionsString = instructions && Object.keys(instructions).length > 0
-    ? `\n\n**IMPORTANT INSTRUCTIONS**\nWhen updating the profile, you MUST follow these specific instructions for the specified fields:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
+    ? `\n\n**CHARACTER-SPECIFIC INSTRUCTIONS**\nWhen updating the profile, you MUST also follow these character-specific instructions:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
     : '';
 
   const prompt = `
@@ -37,9 +52,11 @@ ${existingProfileJson}
 Here are the new events that have occurred to this character since the last update:
 
 ${formattedEvents}
+
+${globalRulesString}
 ${instructionsString}
 
-Based on these new events and the instructions provided, update the values for all keys in the JSON profile.
+Based on the new events and ALL instructions provided (both global and specific), update the values for all keys in the JSON profile.
 If a value doesn't need changing, keep the original.
 Your task is to output the complete, updated JSON object, and nothing else.
 
