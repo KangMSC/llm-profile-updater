@@ -30,8 +30,8 @@ const DEFAULT_PROFILE = {
  */
 function formatProfileToTxt(profile) {
   let txtContent = '';
-  // Use the same key order as DEFAULT_PROFILE for consistency
-  for (const key of Object.keys(DEFAULT_PROFILE)) {
+  // Iterate over the actual profile keys, not just the default ones.
+  for (const key of Object.keys(profile)) {
     if (profile.hasOwnProperty(key)) {
       txtContent += `{% block ${key} %}`;
       const value = profile[key];
@@ -77,6 +77,22 @@ async function processCharacter(actorName) {
         }
     }
     const characterInstructions = allInstructions[actorName];
+
+    // Prime the profile with custom fields from instructions
+    if (characterInstructions) {
+        for (const key in characterInstructions) {
+            if (!existingProfile.hasOwnProperty(key)) {
+                console.log(`[Updater] Found new custom field '${key}' from instructions.`);
+                // Add the new key with a default value so the LLM knows about it.
+                const instructionValue = characterInstructions[key];
+                if (typeof instructionValue === 'string' && (instructionValue.includes('array') || instructionValue.includes('list'))) {
+                     existingProfile[key] = [];
+                } else {
+                     existingProfile[key] = '정보 없음';
+                }
+            }
+        }
+    }
 
     db.getActorUUID(actorName, (err, actorUUID) => {
       if (err || !actorUUID) {

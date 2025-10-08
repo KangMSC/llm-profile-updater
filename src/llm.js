@@ -42,8 +42,11 @@ async function updateCharacterProfile(characterName, events, existingProfileJson
     ? `\n\n**CHARACTER-SPECIFIC INSTRUCTIONS**\nWhen updating the profile, you MUST also follow these character-specific instructions:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
     : '';
 
+  const profile = JSON.parse(existingProfileJson);
+  const requiredKeys = Object.keys(profile);
+
   const prompt = `
-Here is the existing JSON profile for the character '${characterName}':
+Here is the existing JSON profile for the character '${characterName}'. It may contain default fields and new custom fields.
 
 \`\`\`json
 ${existingProfileJson}
@@ -57,29 +60,21 @@ ${globalRulesString}
 ${instructionsString}
 
 Based on the new events and ALL instructions provided (both global and specific), update the values for all keys in the JSON profile.
+If a field has an instruction, generate the content for it based on the instruction.
 If a value doesn't need changing, keep the original.
 Your task is to output the complete, updated JSON object, and nothing else.
 
 Always respond in Korean.
 
-The required keys are:
-- summary
-- interject_summary
-- background
-- personality
-- appearance
-- aspirations (must be an array of strings)
-- relationships (must be an array of strings, each formatted as "Name: Description")
-- occupation
-- skills (must be an array of strings)
-- speech_style
+The final JSON object must include all of the following keys, and only these keys:
+- ${requiredKeys.join('\n- ')}
   `;
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile in Korean based on new events. You must only output the raw, updated JSON object. The JSON must contain all 10 required keys: summary, interject_summary, background, personality, appearance, aspirations (as a string array), relationships (as a string array), occupation, skills (as a string array), and speech_style. Do not wrap the JSON in markdown ```json ... ```.' },
+        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile in Korean based on new events. You must only output the raw, updated JSON object. The returned JSON must contain exactly the same keys as the original profile provided in the user prompt. Do not wrap the JSON in markdown ```json ... ```.' },
         { role: 'user', content: prompt },
       ],
     });

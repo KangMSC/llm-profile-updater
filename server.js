@@ -77,17 +77,11 @@ app.get('/characters/:characterName', async (req, res) => {
         }
     }
 
-    // Helper to render the full profile
+    // Helper to render the full profile, including custom fields
     const renderProfileHtml = (profile, exists) => {
         if (!exists) {
             return `<div class="profile-section"><h2>프로필</h2><p>${profile.summary}</p></div>`;
         }
-
-        const PROFILE_FIELDS = [
-            'summary', 'interject_summary', 'background', 'personality',
-            'appearance', 'aspirations', 'relationships', 'occupation',
-            'skills', 'speech_style'
-        ];
 
         const FIELD_LABELS = {
             summary: "요약",
@@ -103,8 +97,10 @@ app.get('/characters/:characterName', async (req, res) => {
         };
 
         let html = '';
-        for (const key of PROFILE_FIELDS) {
-            const label = FIELD_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
+        // Iterate over the actual keys of the profile object to include custom fields
+        for (const key of Object.keys(profile)) {
+            // Generate a label: use predefined label or create one from the key
+            const label = FIELD_LABELS[key] || key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             const value = profile[key];
 
             html += `<div class="profile-section"><h2>${label}</h2>`;
@@ -116,7 +112,7 @@ app.get('/characters/:characterName', async (req, res) => {
                 }
             } else if (value) {
                 // Replace newlines with <br> for display
-                html += `<p>${value.replace(/\n/g, '<br>')}</p>`;
+                html += `<p>${String(value).replace(/\n/g, '<br>')}</p>`;
             } else {
                 html += '<p>정보 없음</p>';
             }
