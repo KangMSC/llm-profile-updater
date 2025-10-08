@@ -7,6 +7,8 @@ const { charactersToUpdate } = require('./config');
 const PROFILES_DIR = path.join(__dirname, '..', 'profiles');
 const GENERATED_PROFILES_DIR = path.join(__dirname, '..', 'generated-profiles');
 
+const INSTRUCTIONS_PATH = path.join(__dirname, '..', 'profile-instructions.json');
+
 // Updated to the new 10-field structure
 const DEFAULT_PROFILE = {
   summary: "정보 없음",
@@ -63,6 +65,19 @@ async function processCharacter(actorName) {
       console.log(`[Updater] No existing profile found for ${actorName}. Using default.`);
     }
 
+    let allInstructions = {};
+    try {
+        const instructionsContent = await fs.readFile(INSTRUCTIONS_PATH, 'utf-8');
+        allInstructions = JSON.parse(instructionsContent);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.log('[Updater] No instructions file found. Proceeding without specific instructions.');
+        } else {
+            console.warn('[Updater] Could not read or parse instructions file. Proceeding without.', error);
+        }
+    }
+    const characterInstructions = allInstructions[actorName];
+
     db.getActorUUID(actorName, (err, actorUUID) => {
       if (err || !actorUUID) {
         console.error(`[Updater] Could not find UUID for ${actorName}. Skipping.`);
@@ -77,7 +92,10 @@ async function processCharacter(actorName) {
 
         try {
           console.log(`[Updater] Found ${events.length} events. Updating profile with LLM...`);
-          const llmResponse = await llm.updateCharacterProfile(actorName, events, JSON.stringify(existingProfile, null, 2));
+          if (characterInstructions) {
+            console.log(`[Updater] Found specific instructions for ${actorName}.`);
+          }
+          const llmResponse = await llm.updateCharacterProfile(actorName, events, JSON.stringify(existingProfile, null, 2), characterInstructions);
 
           const updatedProfile = JSON.parse(llmResponse);
           console.log(`[Updater] Successfully updated profile for ${actorName}.`);

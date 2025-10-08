@@ -9,7 +9,7 @@ const client = axios.create({
   },
 });
 
-async function updateCharacterProfile(characterName, events, existingProfileJson) {
+async function updateCharacterProfile(characterName, events, existingProfileJson, instructions) {
   const formattedEvents = events.map(event => {
     let eventDetails = `Type: ${event.event_type}, Location: ${event.location}, Time: ${event.game_time_str}`;
     let data = event.event_data;
@@ -23,6 +23,10 @@ async function updateCharacterProfile(characterName, events, existingProfileJson
     return `- ${eventDetails}`;
   }).join('\n\n');
 
+  const instructionsString = instructions && Object.keys(instructions).length > 0
+    ? `\n\n**IMPORTANT INSTRUCTIONS**\nWhen updating the profile, you MUST follow these specific instructions for the specified fields:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
+    : '';
+
   const prompt = `
 Here is the existing JSON profile for the character '${characterName}':
 
@@ -33,8 +37,9 @@ ${existingProfileJson}
 Here are the new events that have occurred to this character since the last update:
 
 ${formattedEvents}
+${instructionsString}
 
-Based on these new events, update the values for all keys in the JSON profile.
+Based on these new events and the instructions provided, update the values for all keys in the JSON profile.
 If a value doesn't need changing, keep the original.
 Your task is to output the complete, updated JSON object, and nothing else.
 

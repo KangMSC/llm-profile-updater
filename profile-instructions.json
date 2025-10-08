@@ -1,0 +1,7 @@
+{
+  "__comment": "This file contains specific instructions for the LLM on how to update character profiles. You can specify instructions for each character and for each field within their profile.",
+  "exampleCharacter": {
+    "relationships": "",
+    "summary": ""
+  }
+}
