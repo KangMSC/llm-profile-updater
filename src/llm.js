@@ -41,6 +41,51 @@ Output the complete, updated JSON object.
   }
 }
 
+async function generateCharacterDiary(characterName, events) {
+  const formattedEvents = events.map(event => {
+    let eventDetails = `Type: ${event.event_type}, Location: ${event.location}, Time: ${event.game_time_str}`;
+    let data = event.event_data;
+    try {
+      const jsonData = JSON.parse(data);
+      data = Object.entries(jsonData).map(([key, value]) => `${key}: ${value}`).join(', ');
+    } catch (e) {
+      // Not a JSON string, use as is
+    }
+    eventDetails += `\nDetails: ${data}`;
+    return `- ${eventDetails}`;
+  }).join('\n\n');
+
+  const prompt = `
+You are the character '${characterName}'. I will provide you with a sequence of events that happened to you on a specific day.
+Your task is to write a personal and reflective diary entry in the first person ("I", "me", "my").
+The diary should be written entirely in Korean.
+Do not simply list the events. Instead, weave them into a narrative, describing your feelings, thoughts, and reactions to what happened.
+The tone of the diary should reflect your personality as suggested by your actions, dialogues, and internal thoughts within the events.
+The output should be only the diary entry text, formatted in Markdown.
+
+Here are the events of your day:
+
+${formattedEvents}
+
+Now, write your diary entry for this day.
+  `;
+
+  try {
+    const response = await client.post('/chat/completions', {
+      model: openRouter.model,
+      messages: [
+        { role: 'system', content: 'You are a character in a video game writing a diary entry in Korean based on a list of events. You must only output the diary text in Markdown format.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error calling OpenRouter API for diary generation:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   updateCharacterProfile,
+  generateCharacterDiary,
 };
