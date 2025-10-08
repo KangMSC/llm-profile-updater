@@ -6,6 +6,7 @@ const { charactersToUpdate } = require('./config');
 
 const PROFILES_DIR = path.join(__dirname, '..', 'profiles');
 const GENERATED_PROFILES_DIR = path.join(__dirname, '..', 'generated-profiles');
+const LOGS_DIR = path.join(__dirname, '..', 'logs', 'failed_responses');
 
 const INSTRUCTIONS_PATH = path.join(__dirname, '..', 'profile-instructions.json');
 
@@ -113,7 +114,25 @@ async function processCharacter(actorName) {
           }
           const llmResponse = await llm.updateCharacterProfile(actorName, events, JSON.stringify(existingProfile, null, 2), characterInstructions);
 
-          const updatedProfile = JSON.parse(llmResponse);
+          let updatedProfile;
+          try {
+            // First, try to strip markdown ```json ... ``` if it exists
+            const cleanResponse = llmResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
+            updatedProfile = JSON.parse(cleanResponse);
+          } catch (parseError) {
+            console.error(`[Updater] Failed to parse LLM response for ${actorName}. It was not valid JSON.`);
+            
+            // Log the failed response to a file
+            await fs.mkdir(LOGS_DIR, { recursive: true });
+            const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+            const logPath = path.join(LOGS_DIR, `${actorName}-${timestamp}.log`);
+            await fs.writeFile(logPath, `Failed LLM Response for ${actorName} at ${new Date()}:\n\n${llmResponse}`);
+            console.log(`[Updater] The invalid response has been saved to ${logPath}`);
+            
+            // Since we can't proceed, we resolve the promise to move to the next character.
+            return resolve(); 
+          }
+
           console.log(`[Updater] Successfully updated profile for ${actorName}.`);
 
           // Save the updated JSON profile
