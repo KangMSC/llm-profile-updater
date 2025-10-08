@@ -90,7 +90,7 @@ The required keys are:
   }
 }
 
-async function generateCharacterDiary(characterName, events) {
+async function generateCharacterDiary(characterName, events, profileJson) {
   const formattedEvents = events.map(event => {
     let eventDetails = `Type: ${event.event_type}, Location: ${event.location}, Time: ${event.game_time_str}`;
     let data = event.event_data;
@@ -106,23 +106,27 @@ async function generateCharacterDiary(characterName, events) {
 
   const diaryDate = events[0]?.game_time_str.substring(events[0].game_time_str.indexOf(',') + 2) || 'Unknown Date';
 
+  const profileInfo = profileJson ? `
+Here is your character profile. Use this as a reference for your personality, background, and relationships when writing the diary entry:
+
+\`\`\`json
+${profileJson}
+\`\`\`
+` : '';
+
   const prompt = `
 You are the character '${characterName}'. I will provide you with a sequence of events that happened to you on a specific day.
 Your task is to write a personal and reflective diary entry in the first person ("I", "me", "my").
 The diary should be written entirely in Korean.
 Do not simply list the events. Instead, weave them into a narrative, describing your feelings, thoughts, and reactions to what happened.
 The tone of the diary should reflect your personality as suggested by your actions, dialogues, and internal thoughts within the events.
+${profileInfo}
 
 **IMPORTANT FORMATTING RULES:**
 1. The entire output must be a simple HTML snippet.
-2. Start with a heading for the date: 
-3. Write each paragraph of the diary inside its own 
-4. Do NOT include 
-, 
-, or 
- tags. Only output the 
- and 
- tags.
+2. Start with a heading for the date: <h4>${diaryDate}</h4>
+3. Write each paragraph of the diary inside its own <p> tag.
+4. Do NOT include <html>, <body>, or <head> tags. Only output the <h4> and <p> tags.
 
 Here are the events of your day:
 

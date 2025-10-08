@@ -5,6 +5,7 @@ const llm = require('./llm');
 const { charactersToUpdate } = require('./config');
 
 const DIARIES_DIR = path.join(__dirname, '..', 'diaries');
+const PROFILES_DIR = path.join(__dirname, '..', 'profiles');
 
 function getDiaryDate(events) {
     if (!events || events.length === 0) {
@@ -19,8 +20,20 @@ function getDiaryDate(events) {
 
 
 async function processCharacterForDiary(actorName) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     console.log(`[Diary] Processing character: ${actorName}`);
+
+    // Read profile first
+    let profileJson = '';
+    try {
+        const profilePath = path.join(PROFILES_DIR, `${actorName}.json`);
+        profileJson = await fs.readFile(profilePath, 'utf-8');
+        console.log(`[Diary] Loaded profile for ${actorName}.`);
+    } catch (error) {
+        console.log(`[Diary] No profile found for ${actorName}. Proceeding without it.`);
+        // Create a default empty profile JSON to avoid errors down the line
+        profileJson = JSON.stringify({ summary: "No profile available." });
+    }
 
     db.getActorUUID(actorName, (err, actorUUID) => {
       if (err || !actorUUID) {
@@ -53,7 +66,7 @@ async function processCharacterForDiary(actorName) {
 
           const diaryPath = path.join(characterDiaryDir, diaryFileName);
 
-          const diaryContent = await llm.generateCharacterDiary(actorName, events);
+          const diaryContent = await llm.generateCharacterDiary(actorName, events, profileJson);
           
           if (!diaryContent) {
               console.error(`[Diary] LLM returned no content for ${actorName}. Skipping file write.`);
