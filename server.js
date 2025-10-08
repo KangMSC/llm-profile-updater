@@ -69,8 +69,6 @@ app.get('/characters/:characterName', async (req, res) => {
         if (error.code === 'ENOENT') {
             profile = {
                 summary: '프로필이 아직 생성되지 않았습니다. "Update Profile" 버튼을 눌러 생성을 시작하세요.',
-                appearance: '정보 없음',
-                likesAndDislikes: '정보 없음'
             };
         } else {
             // For other errors, send a generic error page
@@ -79,16 +77,55 @@ app.get('/characters/:characterName', async (req, res) => {
         }
     }
 
-    // Helper to render likes and dislikes safely
-    const likesAndDislikesHtml = () => {
-        if (profileExists && typeof profile.likesAndDislikes === 'object' && profile.likesAndDislikes !== null && !Array.isArray(profile.likesAndDislikes)) {
-            const likes = profile.likesAndDislikes.likes?.map(item => `<li>${item}</li>`).join('') || '<li>정보 없음</li>';
-            const dislikes = profile.likesAndDislikes.dislikes?.map(item => `<li>${item}</li>`).join('') || '<li>정보 없음</li>';
-            return `<h3>Likes</h3><ul>${likes}</ul><h3>Dislikes</h3><ul>${dislikes}</ul>`;
+    // Helper to render the full profile
+    const renderProfileHtml = (profile, exists) => {
+        if (!exists) {
+            return `<div class="profile-section"><h2>프로필</h2><p>${profile.summary}</p></div>`;
         }
-        // For shell profile or simple string format
-        return `<p>${profile.likesAndDislikes}</p>`;
+
+        const PROFILE_FIELDS = [
+            'summary', 'interject_summary', 'background', 'personality',
+            'appearance', 'aspirations', 'relationships', 'occupation',
+            'skills', 'speech_style'
+        ];
+
+        const FIELD_LABELS = {
+            summary: "요약",
+            interject_summary: "난입/말참견 요약",
+            background: "배경",
+            personality: "성격",
+            appearance: "외모",
+            aspirations: "목표/열망",
+            relationships: "관계",
+            occupation: "직업",
+            skills: "기술",
+            speech_style: "말투"
+        };
+
+        let html = '';
+        for (const key of PROFILE_FIELDS) {
+            const label = FIELD_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
+            const value = profile[key];
+
+            html += `<div class="profile-section"><h2>${label}</h2>`;
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    html += '<ul>' + value.map(item => `<li>${item}</li>`).join('') + '</ul>';
+                } else {
+                    html += '<p>정보 없음</p>';
+                }
+            } else if (value) {
+                // Replace newlines with <br> for display
+                html += `<p>${value.replace(/\n/g, '<br>')}</p>`;
+            } else {
+                html += '<p>정보 없음</p>';
+            }
+            html += '</div>';
+        }
+        return html;
     };
+
+    const profileHtml = renderProfileHtml(profile, profileExists);
 
     const template = `
         <!DOCTYPE html>
@@ -103,9 +140,7 @@ app.get('/characters/:characterName', async (req, res) => {
                 <h1>${characterName}</h1>
                 <div class="main-content">
                     <div class="profile-column">
-                        <div class="profile-section"><h2>Summary</h2><p>${profile.summary}</p></div>
-                        <div class="profile-section"><h2>Appearance</h2><p>${profile.appearance}</p></div>
-                        <div class="profile-section"><h2>Likes and Dislikes</h2>${likesAndDislikesHtml()}</div>
+                        ${profileHtml}
                     </div>
                     <div class="diary-column">
                         <h2>Actions</h2>

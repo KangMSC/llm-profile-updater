@@ -34,16 +34,30 @@ Here are the new events that have occurred to this character since the last upda
 
 ${formattedEvents}
 
-Based on these new events, update the values for the \'summary\', \'appearance\', and \'likesAndDislikes\' keys in the JSON profile.
+Based on these new events, update the values for all keys in the JSON profile.
 If a value doesn't need changing, keep the original.
 Your task is to output the complete, updated JSON object, and nothing else.
+
+Always respond in Korean.
+
+The required keys are:
+- summary
+- interject_summary
+- background
+- personality
+- appearance
+- aspirations (must be an array of strings)
+- relationships (must be an array of strings, each formatted as "Name: Description")
+- occupation
+- skills (must be an array of strings)
+- speech_style
   `;
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile based on new events. You must only output the raw, updated JSON object, and nothing else. Do not wrap the JSON in markdown ```json ... ```.' },
+        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile in Korean based on new events. You must only output the raw, updated JSON object. The JSON must contain all 10 required keys: summary, interject_summary, background, personality, appearance, aspirations (as a string array), relationships (as a string array), occupation, skills (as a string array), and speech_style. Do not wrap the JSON in markdown ```json ... ```.' },
         { role: 'user', content: prompt },
       ],
     });
