@@ -27,7 +27,7 @@ function getActorUUID(actorName, callback) {
 }
 
 function getCharacterEvents(actorUUID, callback) {
-  const query = `SELECT * FROM events WHERE originating_actor_UUID = ? ORDER BY game_time DESC`;
+  const query = `SELECT * FROM events WHERE originating_actor_UUID = ? OR event_type = 'direct_narration' ORDER BY game_time DESC`;
   db.all(query, [actorUUID], (err, rows) => {
     if (err) {
       console.error('Error fetching events:', err.message);
@@ -79,7 +79,7 @@ function getEventsForDiary(actorUUID, callback) {
       const diaryEventsQuery = `
         SELECT *
         FROM events
-        WHERE originating_actor_UUID = ? AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) = ?
+        WHERE (originating_actor_UUID = ? OR event_type = 'direct_narration') AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) = ?
         ORDER BY game_time ASC
       `;
 
