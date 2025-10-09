@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
+const multer = require('multer');
 const db = require('./src/db');
 const { charactersToUpdate } = require('./src/config');
 const { processCharacterForDiary } = require('./src/diary');
@@ -12,6 +13,23 @@ const PORT = 3001;
 
 const PROFILES_DIR = path.join(__dirname, 'profiles');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// Multer setup for file uploads
+const storage = multer.diskStorage({
+    destination: async function (req, file, cb) {
+        const characterName = req.params.characterName; // Get character name from URL params
+        const dest = path.join(PUBLIC_DIR, 'images', 'characters', characterName);
+        await fs.mkdir(dest, { recursive: true }); // Ensure directory exists
+        cb(null, dest);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now();
+        const extension = path.extname(file.originalname);
+        cb(null, `${uniqueSuffix}${extension}`); // Filename is just timestamp.ext
+    }
+});
+const upload = multer({ storage: storage });
+
 
 // Middleware
 app.use(express.json());
@@ -78,30 +96,6 @@ app.get('/characters/:characterName', async (req, res) => {
         }
     }
 
-    // Check for character image
-    const imageName = `${characterName}.png`;
-    const imagePath = `/images/characters/${imageName}`; // URL path for the browser
-    const imageFilePath = path.join(PUBLIC_DIR, 'images', 'characters', imageName); // Filesystem path to check existence
-
-    let imageExists = false;
-    try {
-        await fs.access(imageFilePath);
-        imageExists = true;
-    } catch (error) {
-        // It's okay if the image doesn't exist.
-    }
-
-    const imageBlockHtml = `
-        <div class="character-image-container">
-            ${imageExists
-                ? `<img id="character-image" src="${imagePath}?v=${new Date().getTime()}" alt="${characterName}'s image">`
-                : `<div class="image-placeholder"><span>No Image</span></div>`
-            }
-        </div>
-        <button id="regenerate-image-btn">Regenerate Image</button>
-    `;
-
-
     // Helper to render the full profile, including custom fields
     const renderProfileHtml = (profile, exists) => {
         if (!exists) {
@@ -165,8 +159,55 @@ app.get('/characters/:characterName', async (req, res) => {
         return html;
     };
 
-    const profileHtml = renderProfileHtml(profile, profileExists);
 
+    // Helper function to find the first existing image path
+    async function findExistingImagePath(paths) {
+        for (const p of paths) {
+            if (!p) continue;
+            const fullPath = path.join(PUBLIC_DIR, p);
+            try {
+                await fs.access(fullPath);
+                return p;
+            } catch (error) {
+                // File does not exist, continue to next
+            }
+        }
+        return null; // No existing image found
+    }
+
+        // Determine current image and history by scanning the character's image directory
+        const characterImageDir = path.join(PUBLIC_DIR, 'images', 'characters', characterName);
+        let imageFiles = [];
+        try {
+            const files = await fs.readdir(characterImageDir);
+            imageFiles = files.filter(file => /\.(png|jpe?g|gif|webp)$/i.test(file));
+            // Sort by timestamp (which is the filename without extension) in descending order (newest first)
+            imageFiles.sort((a, b) => parseInt(b.split('.')[0]) - parseInt(a.split('.')[0]));
+        } catch (error) {
+            // Directory might not exist yet, which is fine
+            if (error.code !== 'ENOENT') {
+                console.error(`Error reading image directory for ${characterName}:`, error);
+            }
+        }
+    
+        let currentImageToDisplay = null;
+        let imageHistoryForDisplay = [];
+    
+        if (imageFiles.length > 0) {
+            currentImageToDisplay = `/images/characters/${characterName}/${imageFiles[0]}`;
+            imageHistoryForDisplay = imageFiles.slice(1).map(file => `/images/characters/${characterName}/${file}`);
+        }
+    
+        const imageBlockHtml = `
+            <div class="character-image-container">
+                ${currentImageToDisplay
+                    ? `<img id="character-image" src="${currentImageToDisplay}?v=${new Date().getTime()}" alt="${characterName}'s image">`
+                    : ``
+                }
+            </div>
+        `;
+    
+        const profileHtml = renderProfileHtml(profile, profileExists);
     const template = `
         <!DOCTYPE html>
         <html lang="ko">
@@ -177,7 +218,7 @@ app.get('/characters/:characterName', async (req, res) => {
             <style>
                 .character-image-container {
                     width: 100%;
-                    aspect-ratio: 1 / 1;
+                    /* aspect-ratio: 1 / 1; */ /* Removed to allow natural aspect ratio */
                     border: 1px solid #ccc;
                     margin-bottom: 1rem;
                     display: flex;
@@ -188,14 +229,9 @@ app.get('/characters/:characterName', async (req, res) => {
                     overflow: hidden;
                 }
                 .character-image-container img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                }
-                .image-placeholder {
-                    color: #888;
-                    font-size: 1.2rem;
-                    text-align: center;
+                    max-width: 100%; /* Ensure image fits width */
+                    max-height: 100%; /* Ensure image fits height */
+                    object-fit: contain; /* Show entire image, no cropping */
                 }
                 #regenerate-image-btn {
                     width: 100%;
@@ -211,6 +247,19 @@ app.get('/characters/:characterName', async (req, res) => {
                     border: 1px solid #ccc;
                     background-color: #f9f9f9;
                 }
+                .image-history-gallery {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                    gap: 10px;
+                    margin-top: 1rem;
+                }
+                .image-history-gallery img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 4px;
+                    cursor: pointer;
+                }
             </style>
         </head>
         <body data-character-name='${characterName}'>
@@ -219,6 +268,14 @@ app.get('/characters/:characterName', async (req, res) => {
                 <div class="main-content">
                     <div class="profile-column">
                         ${imageBlockHtml}
+
+                        <div class="upload-section">
+                            <form action="/api/characters/${characterName}/upload-image" method="post" enctype="multipart/form-data">
+                                <input type="file" name="profileImage" accept="image/*" required>
+                                <button type="submit">Upload New Image</button>
+                            </form>
+                        </div>
+
                         ${profileHtml}
                     </div>
                     <div class="diary-column">
@@ -231,6 +288,11 @@ app.get('/characters/:characterName', async (req, res) => {
                         <h2 style="margin-top: 2rem;">Stable Diffusion</h2>
                         <button id="generate-prompt-btn">Generate SD Prompt</button>
                         <textarea id="generated-prompt-area" rows="6" placeholder="Generated Stable Diffusion prompt will appear here..."></textarea>
+
+                        <h2 style="margin-top: 2rem;">Image History</h2>
+                        <div class="image-history-gallery">
+                            ${imageHistoryForDisplay.map(imgPath => `<img src="${imgPath}" alt="Past image">`).join('')}
+                        </div>
 
                         <h2 style="margin-top: 2rem;">Diary</h2>
                         <div id="diary-list"></div>
@@ -255,6 +317,24 @@ app.get('/characters/:characterName', async (req, res) => {
 });
 
 // --- API Endpoints ---
+
+app.post('/api/characters/:characterName/upload-image', upload.single('profileImage'), async (req, res) => {
+    const { characterName } = req.params;
+
+    if (!req.file) {
+        return res.status(400).send('No file uploaded.');
+    }
+
+    try {
+        // Image is already saved by multer to the correct character folder
+        // No need to update JSON profile for image paths anymore
+        res.redirect(`/characters/${characterName}`);
+    } catch (error) {
+        console.error(`Error uploading image for ${characterName}:`, error);
+        res.status(500).send('Error processing image upload.');
+    }
+});
+
 
 app.post('/api/profiles/:characterName/update', async (req, res) => {
     const { characterName } = req.params;
@@ -296,42 +376,7 @@ app.post('/api/diaries/:characterName/generate', async (req, res) => {
     }
 });
 
-app.post('/api/images/:characterName/generate', async (req, res) => {
-    const { characterName } = req.params;
-    const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
-    const imageDir = path.join(PUBLIC_DIR, 'images', 'characters');
-    const imagePath = path.join(imageDir, `${characterName}.png`);
 
-    try {
-        // 1. Read profile to create a prompt
-        const profileJson = await fs.readFile(profilePath, 'utf-8');
-        const profile = JSON.parse(profileJson);
-
-        // 2. Create a simplified prompt (in English for the model) to avoid safety filters.
-        const prompt = `A fantasy character portrait of ${characterName}. ` +
-                       `Appearance: ${profile.appearance || 'Not specified'}.`;
-
-        console.log(`[Image Gen] Using simplified prompt: "${prompt}"`);
-
-        // 3. Generate image from prompt
-        const base64Data = await generateCharacterImage(prompt);
-
-        // 4. Save the image
-        await fs.mkdir(imageDir, { recursive: true });
-        await fs.writeFile(imagePath, base64Data, 'base64');
-
-        console.log(`[Image Gen] Successfully saved image to ${imagePath}`);
-        res.json({ message: 'Image generated successfully.', imagePath: `/images/characters/${characterName}.png` });
-
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            console.error(`[Image Gen] Profile not found for ${characterName}.`);
-            return res.status(404).json({ message: 'Profile not found. Please create a profile first.' });
-        }
-        console.error(`[Image Gen] Failed to generate image for ${characterName}:`, error);
-        res.status(500).json({ message: 'Image generation failed.' });
-    }
-});
 
 app.get('/api/prompts/:characterName/generate', async (req, res) => {
     const { characterName } = req.params;
