@@ -5,6 +5,7 @@ const db = require('./src/db');
 const { charactersToUpdate } = require('./src/config');
 const { processCharacterForDiary } = require('./src/diary');
 const { processCharacter } = require('./src/main');
+const { generateCharacterImage } = require('./src/llm');
 
 const app = express();
 const PORT = 3001;
@@ -76,6 +77,30 @@ app.get('/characters/:characterName', async (req, res) => {
             return res.status(500).send("Error loading profile data.");
         }
     }
+
+    // Check for character image
+    const imageName = `${characterName}.png`;
+    const imagePath = `/images/characters/${imageName}`; // URL path for the browser
+    const imageFilePath = path.join(PUBLIC_DIR, 'images', 'characters', imageName); // Filesystem path to check existence
+
+    let imageExists = false;
+    try {
+        await fs.access(imageFilePath);
+        imageExists = true;
+    } catch (error) {
+        // It's okay if the image doesn't exist.
+    }
+
+    const imageBlockHtml = `
+        <div class="character-image-container">
+            ${imageExists
+                ? `<img id="character-image" src="${imagePath}?v=${new Date().getTime()}" alt="${characterName}'s image">`
+                : `<div class="image-placeholder"><span>No Image</span></div>`
+            }
+        </div>
+        <button id="regenerate-image-btn">Regenerate Image</button>
+    `;
+
 
     // Helper to render the full profile, including custom fields
     const renderProfileHtml = (profile, exists) => {
@@ -149,12 +174,41 @@ app.get('/characters/:characterName', async (req, res) => {
             <meta charset="UTF-8">
             <title>${characterName} - Profile</title>
             <link rel="stylesheet" href="/style.css">
+            <style>
+                .character-image-container {
+                    width: 100%;
+                    aspect-ratio: 1 / 1;
+                    border: 1px solid #ccc;
+                    margin-bottom: 1rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-color: #f0f0f0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                .character-image-container img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                .image-placeholder {
+                    color: #888;
+                    font-size: 1.2rem;
+                    text-align: center;
+                }
+                #regenerate-image-btn {
+                    width: 100%;
+                    margin-bottom: 1.5rem; /* Add more space below the button */
+                }
+            </style>
         </head>
         <body data-character-name='${characterName}'>
             <div class="container">
                 <h1>${characterName}</h1>
                 <div class="main-content">
                     <div class="profile-column">
+                        ${imageBlockHtml}
                         ${profileHtml}
                     </div>
                     <div class="diary-column">
@@ -224,6 +278,43 @@ app.post('/api/diaries/:characterName/generate', async (req, res) => {
         res.status(500).json({ message: 'Diary generation failed.' });
     } finally {
         db.close();
+    }
+});
+
+app.post('/api/images/:characterName/generate', async (req, res) => {
+    const { characterName } = req.params;
+    const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
+    const imageDir = path.join(PUBLIC_DIR, 'images', 'characters');
+    const imagePath = path.join(imageDir, `${characterName}.png`);
+
+    try {
+        // 1. Read profile to create a prompt
+        const profileJson = await fs.readFile(profilePath, 'utf-8');
+        const profile = JSON.parse(profileJson);
+
+        // 2. Create a simplified prompt (in English for the model) to avoid safety filters.
+        const prompt = `A fantasy character portrait of ${characterName}. ` +
+                       `Appearance: ${profile.appearance || 'Not specified'}.`;
+
+        console.log(`[Image Gen] Using simplified prompt: "${prompt}"`);
+
+        // 3. Generate image from prompt
+        const base64Data = await generateCharacterImage(prompt);
+
+        // 4. Save the image
+        await fs.mkdir(imageDir, { recursive: true });
+        await fs.writeFile(imagePath, base64Data, 'base64');
+
+        console.log(`[Image Gen] Successfully saved image to ${imagePath}`);
+        res.json({ message: 'Image generated successfully.', imagePath: `/images/characters/${characterName}.png` });
+
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.error(`[Image Gen] Profile not found for ${characterName}.`);
+            return res.status(404).json({ message: 'Profile not found. Please create a profile first.' });
+        }
+        console.error(`[Image Gen] Failed to generate image for ${characterName}:`, error);
+        res.status(500).json({ message: 'Image generation failed.' });
     }
 });
 

@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     const characterName = document.body.dataset.characterName;
 
@@ -13,6 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('diary-modal');
     const modalBody = document.getElementById('modal-body');
     const modalClose = document.querySelector('.modal-close');
+
+    // Image elements
+    const regenerateImageBtn = document.getElementById('regenerate-image-btn');
+    const imageContainer = document.querySelector('.character-image-container');
 
     async function loadDiaries() {
         try {
@@ -82,6 +85,49 @@ document.addEventListener('DOMContentLoaded', () => {
             // Page reloads, so no need to re-enable the button
         }
     });
+
+    if (regenerateImageBtn) {
+        regenerateImageBtn.addEventListener('click', async () => {
+            regenerateImageBtn.disabled = true;
+            profileStatus.textContent = 'Generating image...'; // Reuse status element
+
+            try {
+                const response = await fetch(`/api/images/${characterName}/generate`, { method: 'POST' });
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || 'Failed to generate image.');
+                }
+
+                profileStatus.textContent = 'Image generated successfully!';
+
+                const placeholder = imageContainer.querySelector('.image-placeholder');
+                let image = imageContainer.querySelector('img');
+
+                if (placeholder) {
+                    // If placeholder exists, create and insert the image element
+                    image = document.createElement('img');
+                    image.id = 'character-image';
+                    image.alt = `${characterName}'s image`;
+                    placeholder.replaceWith(image);
+                }
+                
+                // Update src with a cache-busting parameter
+                image.src = `${result.imagePath}?v=${new Date().getTime()}`;
+
+            } catch (error) {
+                profileStatus.textContent = `Error: ${error.message}`;
+            } finally {
+                regenerateImageBtn.disabled = false;
+                setTimeout(() => {
+                    // Clear status only if it was set by this action
+                    if (profileStatus.textContent.includes('Image') || profileStatus.textContent.includes('Error')) {
+                        profileStatus.textContent = '';
+                    }
+                }, 5000);
+            }
+        });
+    }
 
     loadDiaries();
 });
