@@ -96,6 +96,25 @@ app.get('/characters/:characterName', async (req, res) => {
             speech_style: "말투"
         };
 
+        const formatArrayValueToHtml = (value) => {
+            // Check if the array contains objects
+            if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                return value.map(item => {
+                    let content;
+                    // Specifically format 'relationships' style objects
+                    if (item.name && item.status) {
+                        content = `<strong>${item.name}:</strong> ${item.status}`;
+                    } else {
+                        // Fallback for other object structures
+                        content = JSON.stringify(item);
+                    }
+                    return `<li>${content}</li>`;
+                }).join('');
+            }
+            // Handle arrays of strings
+            return value.map(item => `<li>${item}</li>`).join('');
+        };
+
         let html = '';
         // Iterate over the actual keys of the profile object to include custom fields
         for (const key of Object.keys(profile)) {
@@ -106,7 +125,7 @@ app.get('/characters/:characterName', async (req, res) => {
             html += `<div class="profile-section"><h2>${label}</h2>`;
             if (Array.isArray(value)) {
                 if (value.length > 0) {
-                    html += '<ul>' + value.map(item => `<li>${item}</li>`).join('') + '</ul>';
+                    html += '<ul>' + formatArrayValueToHtml(value) + '</ul>';
                 } else {
                     html += '<p>정보 없음</p>';
                 }

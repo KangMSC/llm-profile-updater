@@ -25,27 +25,84 @@ const DEFAULT_PROFILE = {
 };
 
 /**
- * Formats a profile JSON object into a string with {% block %} tags.
+ * Formats a profile JSON object into a string with a hybrid format.
+ * Default fields use {% block %} syntax, while custom fields use markdown.
  * @param {object} profile - The character profile object.
  * @returns {string} - The formatted string.
  */
 function formatProfileToTxt(profile) {
-  let txtContent = '';
-  // Iterate over the actual profile keys, not just the default ones.
-  for (const key of Object.keys(profile)) {
+  let defaultContent = '';
+  let customContent = '';
+
+  const formatArrayValue = (value) => {
+    // Check if the array contains objects
+    if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+      return value.map(item => {
+        // Specifically format 'relationships' style objects
+        if (item.name && item.status) {
+          return `${item.name}: ${item.status}`;
+        }
+        // Fallback for other object structures to avoid '[object Object]'
+        return JSON.stringify(item);
+      }).join('\n- ');
+    }
+    // Handle arrays of strings
+    return value.join('\n- ');
+  };
+
+  // First, iterate over the default profile keys to maintain order and format
+  for (const key of Object.keys(DEFAULT_PROFILE)) {
     if (profile.hasOwnProperty(key)) {
-      txtContent += `{% block ${key} %}`;
+      defaultContent += `{% block ${key} %}`;
       const value = profile[key];
       if (Array.isArray(value)) {
-        // Format arrays as bulleted lists, ensuring proper spacing and handling empty lists
-        txtContent += value.length > 0 ? '\n- ' + value.join('\n- ') + '\n' : '';
+        if (value.length > 0) {
+          defaultContent += '\n- ' + formatArrayValue(value) + '\n';
+        }
       } else {
-        txtContent += value;
+        defaultContent += value || ''; // Ensure null/undefined doesn't break it
       }
-      txtContent += `{% endblock %}\n\n`;
+      defaultContent += `{% endblock %}\n\n`;
     }
   }
-  return txtContent.trim();
+
+  // Now, iterate over the profile keys again to find custom fields
+  const customKeys = [];
+  for (const key in profile) {
+    if (profile.hasOwnProperty(key) && !DEFAULT_PROFILE.hasOwnProperty(key)) {
+        customKeys.push(key);
+    }
+  }
+
+  if (customKeys.length > 0) {
+      // Add a clear separator between default and custom blocks if default content exists
+      if (defaultContent.trim().length > 0) {
+          customContent += '---\n\n';
+      }
+      
+      for (let i = 0; i < customKeys.length; i++) {
+          const key = customKeys[i];
+          customContent += `### ${key}\n`;
+          const value = profile[key];
+          
+          if (Array.isArray(value)) {
+              if (value.length > 0) {
+                customContent += '- ' + formatArrayValue(value) + '\n';
+              } else {
+                customContent += '정보 없음\n';
+              }
+          } else {
+              customContent += (value || '정보 없음') + '\n';
+          }
+
+          if (i < customKeys.length - 1) {
+              customContent += '\n---\n\n';
+          }
+      }
+  }
+
+  // Combine default and custom content
+  return (defaultContent + customContent).trim();
 }
 
 
