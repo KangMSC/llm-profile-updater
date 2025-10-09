@@ -406,51 +406,22 @@ app.get('/characters/:characterName', async (req, res) => {
                 .modal-content {
                     background-color: #fefefe;
                     margin: auto;
-                    padding: 20px;
+                    padding: 20px 0; /* Vertical padding only, horizontal padding handled by wrapper */
                     border: 1px solid #888;
                     width: 80%;
                     max-width: 800px;
                     border-radius: 8px;
                     position: relative;
                     max-height: 90vh;
-                    overflow-y: auto;
+                    display: flex; /* Use flexbox for internal layout */
+                    flex-direction: column;
                 }
-                .modal-close {
-                    color: #aaa;
-                    position: absolute;
-                    top: 10px;
-                    right: 20px;
-                    font-size: 28px;
-                    font-weight: bold;
+                #modal-body-wrapper {
+                    flex-grow: 1; /* Allow wrapper to take available space */
+                    overflow-y: auto; /* Make only the content scrollable */
+                    padding: 0 50px; /* Horizontal padding for text, creating space for buttons */
                 }
-                .modal-close:hover,
-                .modal-close:focus {
-                    color: black;
-                    text-decoration: none;
-                    cursor: pointer;
-                }
-                /* Image Gallery Modal Specific Styles */
-                .image-modal-content {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background-color: transparent; /* Transparent background for image modal */
-                    border: none;
-                    padding: 0;
-                    max-width: 90vw;
-                    max-height: 90vh;
-                }
-                .image-modal-content img {
-                    max-width: 100%;
-                    max-height: 100%;
-                    object-fit: contain;
-                    border-radius: 8px;
-                }
-                .image-modal-content .modal-close {
-                    color: white;
-                    text-shadow: 0 0 5px black;
-                }
-                .nav-button {
+                .modal-content .nav-button {
                     position: absolute;
                     top: 50%;
                     transform: translateY(-50%);
@@ -461,16 +432,13 @@ app.get('/characters/:characterName', async (req, res) => {
                     cursor: pointer;
                     font-size: 1.5rem;
                     border-radius: 5px;
-                    z-index: 1000; /* Ensure buttons are above image */
+                    z-index: 1000; /* Ensure buttons are above content */
                 }
-                .nav-button.prev-button {
+                .modal-content .diary-prev-button {
                     left: 10px;
                 }
-                .nav-button.next-button {
+                .modal-content .diary-next-button {
                     right: 10px;
-                }
-                .nav-button:hover {
-                    background-color: rgba(0, 0, 0, 0.8);
                 }
             </style>
         </head>
@@ -515,8 +483,12 @@ app.get('/characters/:characterName', async (req, res) => {
             <!-- Diary Modal -->
             <div id="diary-modal" class="modal-overlay">
                 <div class="modal-content">
-                    <span class="modal-close">&times;</span>
-                    <div id="modal-body"></div>
+                    <span class="modal-close diary-modal-close">&times;</span>
+                    <button class="nav-button prev-button diary-prev-button">&lt;</button>
+                    <div id="modal-body-wrapper">
+                        <div id="modal-body"></div>
+                    </div>
+                    <button class="nav-button next-button diary-next-button">&gt;</button>
                 </div>
             </div>
 
@@ -576,8 +548,16 @@ app.get('/api/diaries/:characterName', async (req, res) => {
     const diaryDir = path.join(__dirname, 'diaries', characterName);
     try {
         const files = await fs.readdir(diaryDir);
-        const htmlFiles = files.filter(file => file.endsWith('.html')).reverse();
-        res.json(htmlFiles);
+        const diaryEntriesWithStats = await Promise.all(files.filter(file => file.endsWith('.html')).map(async file => {
+            const filePath = path.join(diaryDir, file);
+            const stats = await fs.stat(filePath);
+            return { file, birthtime: stats.birthtimeMs };
+        }));
+
+        // Sort by birthtime (oldest to newest)
+        diaryEntriesWithStats.sort((a, b) => a.birthtime - b.birthtime);
+
+        res.json(diaryEntriesWithStats.map(entry => entry.file));
     } catch (error) {
         if (error.code === 'ENOENT') res.json([]);
         else res.status(500).json({ message: 'Error reading diary directory.' });

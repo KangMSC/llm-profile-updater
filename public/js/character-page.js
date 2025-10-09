@@ -12,7 +12,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const diaryStatus = document.getElementById('diary-status');
     const diaryModal = document.getElementById('diary-modal');
     const diaryModalBody = document.getElementById('modal-body');
-    const diaryModalClose = document.querySelector('#diary-modal .modal-close');
+    const diaryModalClose = document.querySelector('.diary-modal-close');
+    const diaryPrevButton = document.querySelector('.diary-prev-button');
+    const diaryNextButton = document.querySelector('.diary-next-button');
+
+    let diaryEntries = []; // Stores sorted diary file names
+    let currentDiaryIndex = 0;
 
     // Image elements
     const imageContainer = document.querySelector('.character-image-container');
@@ -42,15 +47,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadDiaries() {
         try {
             const response = await fetch('/api/diaries/' + characterName + '?t=' + new Date().getTime());
-            const files = await response.json();
-            if (files.length === 0) {
+            diaryEntries = await response.json(); // Get sorted file names
+
+            if (diaryEntries.length === 0) {
                 diaryList.innerHTML = '<p>No diary entries found.</p>';
                 return;
             }
-            const fileLinks = files.map(file => {
+            const fileLinks = diaryEntries.map((file, index) => {
                 const displayName = file.replace(/_/g, ' ').replace('.html', '');
-                const diaryPath = '/diaries/' + characterName + '/' + file;
-                return `<li><a href="javascript:void(0)" data-diary-path="${diaryPath}">${displayName}</a></li>`;
+                // Store index in data attribute for easy lookup
+                return `<li><a href="javascript:void(0)" data-diary-index="${index}">${displayName}</a></li>`;
             }).join('');
             diaryList.innerHTML = `<ul>${fileLinks}</ul>`;
         } catch (error) {
@@ -59,24 +65,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Diary Modal Logic ---
+    async function openDiaryModal(index) {
+        currentDiaryIndex = index;
+        const file = diaryEntries[currentDiaryIndex];
+        const diaryPath = '/diaries/' + characterName + '/' + file;
+        try {
+            const response = await fetch(diaryPath);
+            const diaryHtml = await response.text();
+            diaryModalBody.innerHTML = diaryHtml;
+            diaryModal.style.display = 'flex';
+            updateDiaryNavButtons();
+        } catch (error) {
+            diaryModalBody.innerHTML = '<p>Could not load diary content.</p>';
+            diaryModal.style.display = 'flex';
+        }
+    }
+
+    function navigateDiary(direction) {
+        currentDiaryIndex += direction;
+        openDiaryModal(currentDiaryIndex);
+    }
+
+    function updateDiaryNavButtons() {
+        diaryPrevButton.disabled = currentDiaryIndex === 0;
+        diaryNextButton.disabled = currentDiaryIndex === diaryEntries.length - 1;
+    }
+
     diaryList.addEventListener('click', async (e) => {
         if (e.target.tagName === 'A') {
             e.preventDefault();
-            const path = e.target.dataset.diaryPath;
-            try {
-                const response = await fetch(path);
-                const diaryHtml = await response.text();
-                diaryModalBody.innerHTML = diaryHtml;
-                diaryModal.style.display = 'flex';
-            } catch (error) {
-                diaryModalBody.innerHTML = '<p>Could not load diary content.</p>';
-                diaryModal.style.display = 'flex';
+            const index = parseInt(e.target.dataset.diaryIndex);
+            if (!isNaN(index)) {
+                openDiaryModal(index);
             }
         }
     });
 
     diaryModalClose.addEventListener('click', () => { diaryModal.style.display = 'none'; });
     diaryModal.addEventListener('click', (e) => { if (e.target === diaryModal) { diaryModal.style.display = 'none'; } });
+    diaryPrevButton.addEventListener('click', () => navigateDiary(-1));
+    diaryNextButton.addEventListener('click', () => navigateDiary(1));
 
     // --- Image Gallery Logic ---
     function openImageModal(index) {
@@ -142,8 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => location.reload(), 2000);
         } catch (error) {
             profileStatus.textContent = 'Error: ' + error.message;
-        } finally {
-            // Page reloads, so no need to re-enable the button
         }
     });
 

@@ -205,3 +205,39 @@
 
 1.  **`SyntaxError: Identifier 'profileHtml' has already been declared` 해결**: `server.js`에서 `profileHtml` 변수의 중복 선언을 제거하여 구문 오류를 해결했습니다.
 2.  **`ReferenceError: renderProfileHtml is not defined` 해결**: `server.js`에서 `renderProfileHtml` 함수 정의가 실수로 제거되었던 것을 다시 삽입하여 참조 오류를 해결했습니다.
+
+---
+
+## 2025년 10월 9일 (심야) - UI/UX 개선 및 추가 기능 구현
+
+### 기능 추가 및 개선
+
+1.  **UI/레이아웃 재구성 (3단 컬럼)**:
+    *   화면 가로 길이를 확장하고 캐릭터 상세 페이지를 3단 컬럼 레이아웃으로 재구성했습니다.
+    *   **왼쪽 컬럼**: 이미지 관련 콘텐츠 (메인 이미지, 업로드 폼, 이미지 히스토리)
+    *   **중간 컬럼**: 프로필 콘텐츠
+    *   **오른쪽 컬럼**: 일기 관련 콘텐츠 (일기 목록, 일기 생성 버튼, SD 프롬프트 생성)
+    *   `server.js`의 HTML 구조와 CSS를 수정하여 새로운 레이아웃을 적용했습니다.
+
+2.  **이미지 히스토리 갤러리 기능 강화**:
+    *   히스토리 갤러리 썸네일 클릭 시 원본 이미지를 볼 수 있는 모달(lightbox) 기능을 구현했습니다.
+    *   모달 내에서 좌우 탐색 버튼을 통해 히스토리 이미지를 넘겨볼 수 있도록 했습니다.
+    *   `server.js`에 이미지 갤러리 모달 HTML을 추가하고 `imageHistoryForDisplay` 데이터를 클라이언트 측으로 전달하도록 수정했습니다.
+    *   `public/js/character-page.js`에 이미지 갤러리 모달의 클라이언트 측 로직(모달 열기, 탐색, 닫기)을 구현했습니다.
+
+3.  **일기 기능 개선**:
+    *   일기 항목을 파일 생성일 기준으로 날짜순(오래된 것부터 최신순)으로 정렬하도록 `server.js`의 `/api/diaries/:characterName` 엔드포인트를 수정했습니다.
+    *   일기 모달 내에서 좌우 탐색 버튼을 통해 일기 항목을 넘겨볼 수 있도록 했습니다.
+    *   `server.js`의 일기 모달 HTML에 탐색 버튼을 추가했습니다.
+    *   `public/js/character-page.js`에 일기 탐색을 위한 클라이언트 측 로직(정렬된 일기 항목 가져오기, 모달 열기, 탐색, 닫기)을 구현했습니다.
+
+### 버그 수정
+
+1.  **Stable Diffusion 이미지 잘림 현상 해결**:
+    *   업로드된 Stable Diffusion 이미지가 잘려 보이던 문제를 해결했습니다.
+    *   `server.js`의 CSS에서 `.character-image-container`의 `aspect-ratio`를 제거하고, `.character-image-container img`의 `object-fit`을 `contain`으로 변경하여 이미지가 잘리지 않고 비율을 유지하며 표시되도록 했습니다.
+2.  **일기 모달 탐색 버튼 위치 오류 수정**:
+    *   일기 모달의 좌우 탐색 버튼이 텍스트를 가리거나 잘못된 위치에 표시되던 문제를 해결했습니다.
+    *   `server.js`의 HTML에서 탐색 버튼을 `.modal-content` 내부로 다시 이동시키고, `#modal-body`를 `#modal-body-wrapper`로 감싸 스크롤을 제어하도록 했습니다.
+    *   CSS를 조정하여 `.modal-content`를 플렉스 컨테이너로 만들고, `#modal-body-wrapper`에 스크롤과 패딩을 적용하여 버튼이 텍스트와 겹치지 않으면서 올바르게 수직 중앙에 위치하도록 수정했습니다.
+
