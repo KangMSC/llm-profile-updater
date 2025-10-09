@@ -27,13 +27,48 @@ function getActorUUID(actorName, callback) {
 }
 
 function getCharacterEvents(actorUUID, callback) {
-  const query = `SELECT * FROM events WHERE originating_actor_UUID = ? OR event_type = 'direct_narration' ORDER BY game_time DESC`;
-  db.all(query, [actorUUID], (err, rows) => {
+  // Step 1: Find the timestamp of the character's most recent event to establish a reference point.
+  const latestTimestampQuery = `
+    SELECT MAX(game_time) AS latest_time
+    FROM events
+    WHERE originating_actor_UUID = ?`;
+
+  db.get(latestTimestampQuery, [actorUUID], (err, row) => {
     if (err) {
-      console.error('Error fetching events:', err.message);
+      console.error('Error fetching latest event timestamp:', err.message);
       return callback(err, null);
     }
-    callback(null, rows);
+
+    if (!row || !row.latest_time) {
+      // Fallback for characters with no events, though unlikely.
+      return callback(null, []);
+    }
+
+    const latestTimestamp = row.latest_time;
+    const oneDayInSeconds = 86400; // 24 * 60 * 60
+
+    // Step 2: Calculate the time window for "yesterday" and "the day before yesterday" relative to the last event.
+    const startOfLatestDay = Math.floor(latestTimestamp / oneDayInSeconds) * oneDayInSeconds;
+    const endOfWindow = startOfLatestDay; // Exclusive: up to the beginning of the latest day.
+    const startOfWindow = endOfWindow - (2 * oneDayInSeconds); // Inclusive: from the beginning of the day before yesterday.
+
+    // Step 3: Fetch all events (including direct_narration) that fall within this two-day window.
+    const eventsQuery = `
+      SELECT *
+      FROM events
+      WHERE (originating_actor_UUID = ? OR event_type = 'direct_narration')
+        AND game_time >= ?
+        AND game_time < ?
+      ORDER BY game_time ASC`;
+
+    db.all(eventsQuery, [actorUUID, startOfWindow, endOfWindow], (err, rows) => {
+      if (err) {
+        console.error('Error fetching events for the last two days:', err.message);
+        return callback(err, null);
+      }
+      console.log(`[DB] Found ${rows.length} events in the last two days for actor ${actorUUID}.`);
+      callback(null, rows);
+    });
   });
 }
 
