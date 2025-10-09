@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { openRouter } = require('./config');
+const { openRouter, stableDiffusion } = require('./config');
 
 const client = axios.create({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -231,7 +231,15 @@ async function generateSdPrompt(profileJson) {
         { role: 'user', content: prompt },
       ],
     });
-    return response.data.choices[0].message.content;
+
+    let sdPrompt = response.data.choices[0].message.content;
+
+    // Append LoRA if it's configured
+    if (stableDiffusion.lora) {
+      sdPrompt += `, <lora:${stableDiffusion.lora}:1>`;
+    }
+
+    return sdPrompt;
   } catch (error) {
     console.error('Error calling OpenRouter API for SD prompt generation:', error.response ? error.response.data : error.message);
     throw error;
