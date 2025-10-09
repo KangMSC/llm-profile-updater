@@ -216,11 +216,42 @@ app.get('/characters/:characterName', async (req, res) => {
             <title>${characterName} - Profile</title>
             <link rel="stylesheet" href="/style.css">
             <style>
+                body {
+                    min-width: 1200px; /* Ensure minimum width for the 3-column layout */
+                }
+                .container {
+                    max-width: 1600px; /* Wider container */
+                    margin: 20px auto; /* Center the container */
+                    padding: 20px;
+                    background-color: #fff;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }
+                .main-content-3-col {
+                    display: flex;
+                    gap: 20px; /* Space between columns */
+                    margin-top: 20px;
+                }
+                .image-column {
+                    flex: 0 0 300px; /* Fixed width for image column */
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
+                .profile-column {
+                    flex: 1; /* Takes remaining space */
+                    min-width: 400px; /* Ensure profile column has enough space */
+                }
+                .diary-column {
+                    flex: 0 0 350px; /* Fixed width for diary/actions column */
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
                 .character-image-container {
                     width: 100%;
-                    /* aspect-ratio: 1 / 1; */ /* Removed to allow natural aspect ratio */
                     border: 1px solid #ccc;
-                    margin-bottom: 1rem;
+                    margin-bottom: 0; /* Adjusted margin */
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -229,53 +260,238 @@ app.get('/characters/:characterName', async (req, res) => {
                     overflow: hidden;
                 }
                 .character-image-container img {
-                    max-width: 100%; /* Ensure image fits width */
-                    max-height: 100%; /* Ensure image fits height */
-                    object-fit: contain; /* Show entire image, no cropping */
+                    max-width: 100%;
+                    max-height: 100%;
+                    object-fit: contain;
                 }
-                #regenerate-image-btn {
-                    width: 100%;
-                    margin-bottom: 1.5rem; /* Add more space below the button */
+                .upload-section {
+                    margin-bottom: 0; /* Adjusted margin */
+                }
+                .upload-section form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                .upload-section input[type="file"] {
+                    padding: 5px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                }
+                .upload-section button {
+                    padding: 8px 12px;
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 1rem;
+                }
+                .upload-section button:hover {
+                    background-color: #45a049;
                 }
                 #generated-prompt-area {
                     width: 100%;
-                    margin-top: 0.5rem;
+                    margin-top: 0; /* Adjusted margin */
                     font-family: monospace;
                     font-size: 0.9rem;
                     padding: 8px;
                     border-radius: 4px;
                     border: 1px solid #ccc;
                     background-color: #f9f9f9;
+                    resize: vertical;
                 }
                 .image-history-gallery {
                     display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-                    gap: 10px;
-                    margin-top: 1rem;
+                    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); /* Smaller thumbnails */
+                    gap: 8px;
+                    margin-top: 0; /* Adjusted margin */
+                    max-height: 300px; /* Limit height for scroll */
+                    overflow-y: auto;
+                    padding-right: 5px; /* Space for scrollbar */
                 }
                 .image-history-gallery img {
                     width: 100%;
-                    height: 100%;
+                    height: auto; /* Maintain aspect ratio */
                     object-fit: cover;
                     border-radius: 4px;
                     cursor: pointer;
+                    border: 1px solid #eee;
+                }
+                h1, h2 {
+                    color: #333;
+                    border-bottom: 1px solid #eee;
+                    padding-bottom: 5px;
+                    margin-bottom: 15px;
+                }
+                .profile-section h2 {
+                    font-size: 1.2rem;
+                    margin-top: 1rem;
+                    margin-bottom: 0.5rem;
+                    border-bottom: none;
+                }
+                .profile-section p, .profile-section ul {
+                    font-size: 0.95rem;
+                    line-height: 1.5;
+                    margin-bottom: 10px;
+                }
+                .profile-section ul {
+                    padding-left: 20px;
+                }
+                .profile-section li {
+                    margin-bottom: 5px;
+                }
+                .back-link {
+                    display: block;
+                    margin-top: 20px;
+                    text-align: center;
+                    color: #007bff;
+                    text-decoration: none;
+                }
+                .back-link:hover {
+                    text-decoration: underline;
+                }
+                button {
+                    padding: 10px 15px;
+                    background-color: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 1rem;
+                    margin-bottom: 10px;
+                }
+                button:hover {
+                    background-color: #0056b3;
+                }
+                button:disabled {
+                    background-color: #cccccc;
+                    cursor: not-allowed;
+                }
+                #profile-status, #diary-status {
+                    margin-top: -5px;
+                    margin-bottom: 10px;
+                    font-size: 0.9rem;
+                    color: #555;
+                }
+                #diary-list ul {
+                    list-style: none;
+                    padding: 0;
+                }
+                #diary-list li a {
+                    display: block;
+                    padding: 8px;
+                    background-color: #f8f8f8;
+                    border: 1px solid #eee;
+                    border-radius: 4px;
+                    margin-bottom: 5px;
+                    text-decoration: none;
+                    color: #333;
+                }
+                #diary-list li a:hover {
+                    background-color: #e9e9e9;
+                }
+                .modal-overlay {
+                    display: none; /* Hidden by default */
+                    position: fixed; /* Stay in place */
+                    z-index: 1; /* Sit on top */
+                    left: 0;
+                    top: 0;
+                    width: 100%; /* Full width */
+                    height: 100%; /* Full height */
+                    overflow: auto; /* Enable scroll if needed */
+                    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+                    align-items: center;
+                    justify-content: center;
+                }
+                .modal-content {
+                    background-color: #fefefe;
+                    margin: auto;
+                    padding: 20px;
+                    border: 1px solid #888;
+                    width: 80%;
+                    max-width: 800px;
+                    border-radius: 8px;
+                    position: relative;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                }
+                .modal-close {
+                    color: #aaa;
+                    position: absolute;
+                    top: 10px;
+                    right: 20px;
+                    font-size: 28px;
+                    font-weight: bold;
+                }
+                .modal-close:hover,
+                .modal-close:focus {
+                    color: black;
+                    text-decoration: none;
+                    cursor: pointer;
+                }
+                /* Image Gallery Modal Specific Styles */
+                .image-modal-content {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-color: transparent; /* Transparent background for image modal */
+                    border: none;
+                    padding: 0;
+                    max-width: 90vw;
+                    max-height: 90vh;
+                }
+                .image-modal-content img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    object-fit: contain;
+                    border-radius: 8px;
+                }
+                .image-modal-content .modal-close {
+                    color: white;
+                    text-shadow: 0 0 5px black;
+                }
+                .nav-button {
+                    position: absolute;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background-color: rgba(0, 0, 0, 0.5);
+                    color: white;
+                    border: none;
+                    padding: 10px 15px;
+                    cursor: pointer;
+                    font-size: 1.5rem;
+                    border-radius: 5px;
+                    z-index: 1000; /* Ensure buttons are above image */
+                }
+                .nav-button.prev-button {
+                    left: 10px;
+                }
+                .nav-button.next-button {
+                    right: 10px;
+                }
+                .nav-button:hover {
+                    background-color: rgba(0, 0, 0, 0.8);
                 }
             </style>
         </head>
         <body data-character-name='${characterName}'>
             <div class="container">
                 <h1>${characterName}</h1>
-                <div class="main-content">
-                    <div class="profile-column">
+                <div class="main-content-3-col">
+                    <div class="image-column">
                         ${imageBlockHtml}
-
                         <div class="upload-section">
                             <form action="/api/characters/${characterName}/upload-image" method="post" enctype="multipart/form-data">
                                 <input type="file" name="profileImage" accept="image/*" required>
                                 <button type="submit">Upload New Image</button>
                             </form>
                         </div>
-
+                        <h2 style="margin-top: 1rem;">Image History</h2>
+                        <div class="image-history-gallery" data-image-history='${JSON.stringify(imageHistoryForDisplay)}'>
+                            ${imageHistoryForDisplay.map(imgPath => `<img src="${imgPath}" alt="Past image">`).join('')}
+                        </div>
+                    </div>
+                    <div class="profile-column">
                         ${profileHtml}
                     </div>
                     <div class="diary-column">
@@ -289,11 +505,6 @@ app.get('/characters/:characterName', async (req, res) => {
                         <button id="generate-prompt-btn">Generate SD Prompt</button>
                         <textarea id="generated-prompt-area" rows="6" placeholder="Generated Stable Diffusion prompt will appear here..."></textarea>
 
-                        <h2 style="margin-top: 2rem;">Image History</h2>
-                        <div class="image-history-gallery">
-                            ${imageHistoryForDisplay.map(imgPath => `<img src="${imgPath}" alt="Past image">`).join('')}
-                        </div>
-
                         <h2 style="margin-top: 2rem;">Diary</h2>
                         <div id="diary-list"></div>
                     </div>
@@ -306,6 +517,16 @@ app.get('/characters/:characterName', async (req, res) => {
                 <div class="modal-content">
                     <span class="modal-close">&times;</span>
                     <div id="modal-body"></div>
+                </div>
+            </div>
+
+            <!-- Image Gallery Modal -->
+            <div id="image-gallery-modal" class="modal-overlay">
+                <div class="modal-content image-modal-content">
+                    <span class="modal-close image-modal-close">&times;</span>
+                    <button class="nav-button prev-button">&lt;</button>
+                    <img id="modal-image" src="" alt="Full size image">
+                    <button class="nav-button next-button">&gt;</button>
                 </div>
             </div>
 

@@ -10,16 +10,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const diaryList = document.getElementById('diary-list');
     const generateDiaryBtn = document.getElementById('generate-diary-btn');
     const diaryStatus = document.getElementById('diary-status');
-    const modal = document.getElementById('diary-modal');
-    const modalBody = document.getElementById('modal-body');
-    const modalClose = document.querySelector('.modal-close');
+    const diaryModal = document.getElementById('diary-modal');
+    const diaryModalBody = document.getElementById('modal-body');
+    const diaryModalClose = document.querySelector('#diary-modal .modal-close');
 
     // Image elements
     const imageContainer = document.querySelector('.character-image-container');
+    const imageHistoryGallery = document.querySelector('.image-history-gallery');
+    const imageGalleryModal = document.getElementById('image-gallery-modal');
+    const imageModalClose = document.querySelector('.image-modal-close');
+    const modalImage = document.getElementById('modal-image');
+    const prevButton = document.querySelector('.nav-button.prev-button');
+    const nextButton = document.querySelector('.nav-button.next-button');
+
+    let imageHistory = [];
+    let currentImageIndex = 0;
 
     // SD Prompt elements
     const generatePromptBtn = document.getElementById('generate-prompt-btn');
     const promptArea = document.getElementById('generated-prompt-area');
+
+    // Initialize image history from data attribute
+    if (imageHistoryGallery && imageHistoryGallery.dataset.imageHistory) {
+        try {
+            imageHistory = JSON.parse(imageHistoryGallery.dataset.imageHistory);
+        } catch (e) {
+            console.error("Error parsing image history data:", e);
+        }
+    }
 
     async function loadDiaries() {
         try {
@@ -40,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Diary Modal Logic ---
     diaryList.addEventListener('click', async (e) => {
         if (e.target.tagName === 'A') {
             e.preventDefault();
@@ -47,18 +66,56 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const response = await fetch(path);
                 const diaryHtml = await response.text();
-                modalBody.innerHTML = diaryHtml;
-                modal.style.display = 'flex';
+                diaryModalBody.innerHTML = diaryHtml;
+                diaryModal.style.display = 'flex';
             } catch (error) {
-                modalBody.innerHTML = '<p>Could not load diary content.</p>';
-                modal.style.display = 'flex';
+                diaryModalBody.innerHTML = '<p>Could not load diary content.</p>';
+                diaryModal.style.display = 'flex';
             }
         }
     });
 
-    modalClose.addEventListener('click', () => { modal.style.display = 'none'; });
-    modal.addEventListener('click', (e) => { if (e.target === modal) { modal.style.display = 'none'; } });
+    diaryModalClose.addEventListener('click', () => { diaryModal.style.display = 'none'; });
+    diaryModal.addEventListener('click', (e) => { if (e.target === diaryModal) { diaryModal.style.display = 'none'; } });
 
+    // --- Image Gallery Logic ---
+    function openImageModal(index) {
+        currentImageIndex = index;
+        modalImage.src = imageHistory[currentImageIndex];
+        imageGalleryModal.style.display = 'flex';
+        updateImageNavButtons();
+    }
+
+    function navigateImage(direction) {
+        currentImageIndex += direction;
+        modalImage.src = imageHistory[currentImageIndex];
+        updateImageNavButtons();
+    }
+
+    function updateImageNavButtons() {
+        prevButton.disabled = currentImageIndex === 0;
+        nextButton.disabled = currentImageIndex === imageHistory.length - 1;
+    }
+
+    imageHistoryGallery.addEventListener('click', (e) => {
+        if (e.target.tagName === 'IMG') {
+            const clickedSrc = e.target.src;
+            // Remove the base URL to match the stored paths
+            const baseUrl = window.location.origin;
+            const relativeSrc = clickedSrc.replace(baseUrl, '').split('?')[0]; // Remove cache-busting param
+            const index = imageHistory.indexOf(relativeSrc);
+            if (index !== -1) {
+                openImageModal(index);
+            }
+        }
+    });
+
+    prevButton.addEventListener('click', () => navigateImage(-1));
+    nextButton.addEventListener('click', () => navigateImage(1));
+    imageModalClose.addEventListener('click', () => imageGalleryModal.style.display = 'none');
+    imageGalleryModal.addEventListener('click', (e) => { if (e.target === imageGalleryModal) { imageGalleryModal.style.display = 'none'; } });
+
+    // --- Action Buttons Logic ---
     generateDiaryBtn.addEventListener('click', async () => {
         generateDiaryBtn.disabled = true;
         diaryStatus.textContent = 'Generating diary...';
@@ -89,8 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Page reloads, so no need to re-enable the button
         }
     });
-
-
 
     if (generatePromptBtn) {
         generatePromptBtn.addEventListener('click', async () => {

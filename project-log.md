@@ -109,7 +109,7 @@
 
 1.  **캐릭터 프로필 페이지 표시 정보 확장**:
     -   **문제**: 기존 캐릭터 페이지에서는 `summary`, `appearance` 등 일부 정보만 표시되어, 최근 10개 필드로 확장된 프로필의 모든 내용을 확인할 수 없었습니다.
-    -   **해결**: `server.js`의 캐릭터 페이지 렌더링 로직을 대폭 수정했습니다. 모든 프로필 필드(요약, 배경, 성격, 관계 등 10개)를 동적으로 렌더링하는 `renderProfileHtml` 함수를 구현하여, 하드코딩된 기존 섹션을 대체했습니다. 이제 캐릭터 페이지에서 JSON 프로필의 모든 정보를 확인할 수 있습니다.
+    -   **해결**: `server.js`의 캐릭터 페이지 렌더링 로직을 대폭 수정했습니다. 모든 프로필 필드(요약, 배경, 성격, 관계 등 10개)를 동적으로 렌더링하는 `renderProfileHtml` 함수를 구현하여, 하드코딩된 기존 섹션을 대체했습니다.
 
 ---
 
@@ -134,7 +134,7 @@
     -   **목표**: LLM이 일기를 작성할 때 캐릭터의 성격, 배경, 관계 등을 더 잘 반영하여 깊이 있는 결과물을 만들도록 개선했습니다.
     -   **구현 내용**:
         1.  **`diary.js` 수정**: 일기 생성 프로세스(`processCharacterForDiary`)가 시작될 때, 해당 캐릭터의 `json` 프로필을 먼저 읽어오도록 수정했습니다.
-        2.  **`llm.js` 프롬프트 수정**: `generateCharacterDiary` 함수가 캐릭터 프로필 `json`을 인자로 받아 프롬프트에 포함시키도록 변경했습니다. 이를 통해 LLM은 캐릭터의 설정에 대한 명확한 컨텍스트를 가지고 일기를 작성하게 됩니다.
+        2.  **`llm.js` 프롬프트 수정**: `generateCharacterDiary` 함수가 캐릭터 프로필 `json`을 인자로 받아 프롬프트에 포함시키도록 변경했습니다.
 
 ---
 
@@ -147,7 +147,7 @@
     -   **구현 내용**:
         1.  **`main.js` (프로필 프라이밍)**: 프로필 업데이트 시 `profile-instructions.json`을 읽어 기존 프로필에 없는 새로운 키가 발견되면, 이를 커스텀 필드로 간주하여 '정보 없음' 또는 `[]` 같은 기본값으로 프로필 객체에 먼저 추가합니다.
         2.  **`llm.js` (동적 프롬프트)**: LLM에 요청하는 프롬프트가 더 이상 고정된 필드 목록을 사용하지 않습니다. 대신 `main.js`에서 전달받은 프로필 객체의 모든 키(커스텀 필드 포함)를 동적으로 목록화하여, LLM이 유연한 구조에 맞춰 결과물을 생성하도록 수정했습니다.
-        3.  **`main.js` & `server.js` (동적 출력)**: `.txt` 프로필을 생성하는 `formatProfileToTxt` 함수와 웹 페이지를 렌더링하는 `renderProfileHtml` 함수가 고정된 필드 목록 대신, 최종 프로필 객체에 있는 모든 키를 순회하도록 변경했습니다. 이를 통해 커스텀 필드가 `.txt` 파일과 웹 페이지에 자동으로 표시됩니다.
+        3.  **`main.js` & `server.js` (동적 출력)**: `.txt` 프로필을 생성하는 `formatProfileToTxt` 함수와 웹 페이지를 렌더링하는 `renderProfileHtml` 함수가 고정된 필드 목록 대신, 최종 프로필 객체에 있는 모든 키를 순회하도록 변경했습니다.
 
 ---
 
@@ -173,3 +173,35 @@
     -   **구현 내용**: `src/main.js`의 `formatProfileToTxt` 함수를 수정하여, 프로필 필드를 두 종류로 나누어 처리하도록 변경했습니다.
         -   **기본 필드**: `summary`, `personality` 등 기존 필드들은 상위 프로그램 호환성을 위해 `{% block %}` 구문을 그대로 유지합니다.
         -   **커스텀 필드**: `profile-instructions.json`을 통해 새로 추가된 필드들은, 기본 필드들 다음에 `---` 구분선과 함께 `### 필드명` 형태의 가독성 좋은 마크다운 형식으로 추가됩니다.
+
+---
+
+## 2025년 10월 9일 (심야) - Stable Diffusion 연동 및 이미지 관리 시스템 고도화
+
+### 기능 추가 및 개선
+
+1.  **Stable Diffusion 설정 통합**:
+    *   `STABLE_DIFFUSION_LORA` 환경 변수를 `.env.example`에 추가하고 `src/config.js`에서 이를 읽도록 설정했습니다.
+    *   `src/llm.js`의 `generateSdPrompt` 함수가 생성된 프롬프트에 LoRA 태그를 자동으로 추가하도록 수정했습니다.
+    *   `ui-config.json` 파일을 수정하여 WebUI의 `txt2img` 및 `img2img` 탭에 "최고 품질 Photo 모드" 및 "캐릭터 일관성 유지"를 위한 기본 설정값을 반영했습니다.
+        *   **`txt2img` 기본값**: Sampler: `LCM`, Scheduler: `Exponential`, Steps: `8`, Width: `832`, Height: `1216`, CFG Scale: `1.0`, Prompt: `<lora:dmd2_sdxl_4step_lora_fp16:1>`
+        *   **`img2img` 기본값**: Sampler: `LCM`, Scheduler: `Exponential`, Steps: `6`, CFG Scale: `1.0`, Denoising strength: `0.6`, Prompt: `<lora:dmd2_sdxl_4step_lora_fp16:1>`
+
+2.  **이미지 관리 시스템 리팩토링**:
+    *   `multer` 라이브러리를 설치하여 파일 업로드 기능을 강화했습니다.
+    *   `server.js`를 수정하여:
+        *   업로드된 이미지가 `public/images/characters/<캐릭터이름>/` 하위 디렉토리에 타임스탬프 기반 파일명으로 저장되도록 `multer` 설정을 변경했습니다.
+        *   새로운 API 엔드포인트 `POST /api/characters/:characterName/upload-image`를 추가하여 이미지 업로드를 처리하고, JSON 프로필을 수정하지 않고 파일 시스템에 직접 저장하도록 했습니다.
+        *   캐릭터 페이지 라우트(`GET /characters/:characterName`)를 리팩토링하여, 캐릭터의 이미지 디렉토리를 스캔하여 메인 프로필 이미지와 이미지 히스토리를 동적으로 결정하도록 했습니다.
+        *   가장 최신 이미지(타임스탬프 기준)가 메인 이미지로 표시되고, 나머지 이미지들은 최신순으로 정렬되어 히스토리 갤러리에 표시되며, 디스크에 실제로 존재하는 이미지들만 활용하도록 했습니다.
+        *   "No Image" 플레이스홀더를 제거하여, 유효한 이미지가 없을 경우 빈 컨테이너를 표시하도록 했습니다.
+
+3.  **기존 이미지 생성 기능 제거**:
+    *   더 이상 사용하지 않는 API 기반 이미지 생성 기능을 제거했습니다.
+    *   `server.js`에서 "Regenerate Image" 버튼 HTML과 `POST /api/images/:characterName/generate` 엔드포인트를 삭제했습니다.
+    *   `public/js/character-page.js`에서 관련 클라이언트 측 JavaScript 코드를 제거했습니다.
+
+### 버그 수정
+
+1.  **`SyntaxError: Identifier 'profileHtml' has already been declared` 해결**: `server.js`에서 `profileHtml` 변수의 중복 선언을 제거하여 구문 오류를 해결했습니다.
+2.  **`ReferenceError: renderProfileHtml is not defined` 해결**: `server.js`에서 `renderProfileHtml` 함수 정의가 실수로 제거되었던 것을 다시 삽입하여 참조 오류를 해결했습니다.
