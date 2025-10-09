@@ -5,7 +5,7 @@ const db = require('./src/db');
 const { charactersToUpdate } = require('./src/config');
 const { processCharacterForDiary } = require('./src/diary');
 const { processCharacter } = require('./src/main');
-const { generateCharacterImage } = require('./src/llm');
+const { generateSdPrompt } = require('./src/llm');
 
 const app = express();
 const PORT = 3001;
@@ -201,6 +201,16 @@ app.get('/characters/:characterName', async (req, res) => {
                     width: 100%;
                     margin-bottom: 1.5rem; /* Add more space below the button */
                 }
+                #generated-prompt-area {
+                    width: 100%;
+                    margin-top: 0.5rem;
+                    font-family: monospace;
+                    font-size: 0.9rem;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #ccc;
+                    background-color: #f9f9f9;
+                }
             </style>
         </head>
         <body data-character-name='${characterName}'>
@@ -217,7 +227,12 @@ app.get('/characters/:characterName', async (req, res) => {
                          <div id="profile-status"></div>
                         <button id="generate-diary-btn">Generate Today's Diary</button>
                         <div id="diary-status"></div>
-                        <h2>Diary</h2>
+
+                        <h2 style="margin-top: 2rem;">Stable Diffusion</h2>
+                        <button id="generate-prompt-btn">Generate SD Prompt</button>
+                        <textarea id="generated-prompt-area" rows="6" placeholder="Generated Stable Diffusion prompt will appear here..."></textarea>
+
+                        <h2 style="margin-top: 2rem;">Diary</h2>
                         <div id="diary-list"></div>
                     </div>
                 </div>
@@ -315,6 +330,23 @@ app.post('/api/images/:characterName/generate', async (req, res) => {
         }
         console.error(`[Image Gen] Failed to generate image for ${characterName}:`, error);
         res.status(500).json({ message: 'Image generation failed.' });
+    }
+});
+
+app.get('/api/prompts/:characterName/generate', async (req, res) => {
+    const { characterName } = req.params;
+    const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
+
+    try {
+        const profileJson = await fs.readFile(profilePath, 'utf-8');
+        const prompt = await generateSdPrompt(profileJson);
+        res.json({ prompt });
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return res.status(404).json({ message: 'Profile not found.' });
+        }
+        console.error(`[Prompt Gen] Failed to generate prompt for ${characterName}:`, error);
+        res.status(500).json({ message: 'Prompt generation failed.' });
     }
 });
 

@@ -1,3 +1,4 @@
+
 document.addEventListener('DOMContentLoaded', () => {
     const characterName = document.body.dataset.characterName;
 
@@ -7,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Diary elements
     const diaryList = document.getElementById('diary-list');
-    const generateBtn = document.getElementById('generate-diary-btn');
+    const generateDiaryBtn = document.getElementById('generate-diary-btn');
     const diaryStatus = document.getElementById('diary-status');
     const modal = document.getElementById('diary-modal');
     const modalBody = document.getElementById('modal-body');
@@ -16,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Image elements
     const regenerateImageBtn = document.getElementById('regenerate-image-btn');
     const imageContainer = document.querySelector('.character-image-container');
+
+    // SD Prompt elements
+    const generatePromptBtn = document.getElementById('generate-prompt-btn');
+    const promptArea = document.getElementById('generated-prompt-area');
 
     async function loadDiaries() {
         try {
@@ -55,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     modalClose.addEventListener('click', () => { modal.style.display = 'none'; });
     modal.addEventListener('click', (e) => { if (e.target === modal) { modal.style.display = 'none'; } });
 
-    generateBtn.addEventListener('click', async () => {
-        generateBtn.disabled = true;
+    generateDiaryBtn.addEventListener('click', async () => {
+        generateDiaryBtn.disabled = true;
         diaryStatus.textContent = 'Generating diary...';
         try {
             const response = await fetch('/api/diaries/' + characterName + '/generate', { method: 'POST' });
@@ -66,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             diaryStatus.textContent = 'Error: ' + error.message;
         } finally {
-            generateBtn.disabled = false;
+            generateDiaryBtn.disabled = false;
             setTimeout(() => diaryStatus.textContent = '', 5000);
         }
     });
@@ -105,14 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 let image = imageContainer.querySelector('img');
 
                 if (placeholder) {
-                    // If placeholder exists, create and insert the image element
                     image = document.createElement('img');
                     image.id = 'character-image';
                     image.alt = `${characterName}'s image`;
                     placeholder.replaceWith(image);
                 }
                 
-                // Update src with a cache-busting parameter
                 image.src = `${result.imagePath}?v=${new Date().getTime()}`;
 
             } catch (error) {
@@ -120,11 +123,29 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 regenerateImageBtn.disabled = false;
                 setTimeout(() => {
-                    // Clear status only if it was set by this action
                     if (profileStatus.textContent.includes('Image') || profileStatus.textContent.includes('Error')) {
                         profileStatus.textContent = '';
                     }
                 }, 5000);
+            }
+        });
+    }
+
+    if (generatePromptBtn) {
+        generatePromptBtn.addEventListener('click', async () => {
+            generatePromptBtn.disabled = true;
+            promptArea.value = 'Generating prompt...';
+            try {
+                const response = await fetch(`/api/prompts/${characterName}/generate`);
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.message || 'Failed to generate prompt.');
+                }
+                promptArea.value = result.prompt;
+            } catch (error) {
+                promptArea.value = `Error: ${error.message}`;
+            } finally {
+                generatePromptBtn.disabled = false;
             }
         });
     }

@@ -190,8 +190,57 @@ async function generateCharacterImage(prompt) {
   }
 }
 
+async function generateSdPrompt(profileJson) {
+  const profile = JSON.parse(profileJson);
+
+  // Extract key descriptive fields for the prompt
+  const relevantInfo = {
+    appearance: profile.appearance,
+    personality: profile.personality,
+    occupation: profile.occupation,
+    summary: profile.summary,
+  };
+
+  const prompt = `
+    You are an expert Stable Diffusion prompt engineer. Your task is to convert a character profile written in Korean into a high-quality, concise, comma-separated list of keywords in English for generating an image.
+
+    **RULES:**
+    1.  Translate all concepts and descriptions from Korean to English.
+    2.  Focus on visual details: physical appearance, clothing, equipment, and overall mood.
+    3.  Break down sentences into individual keywords or short phrases (e.g., "She has long blonde hair" becomes "long hair, blonde hair").
+    4.  Start with general quality tags.
+    5.  Prioritize keywords from the 'appearance' field.
+    6.  Do NOT include any explanations, only the final comma-separated prompt.
+
+    **Character Profile:**
+    \`\`\`json
+    ${JSON.stringify(relevantInfo, null, 2)}
+    \`\`\`
+
+    **Example Output:**
+    masterpiece, best quality, 1girl, solo, blonde hair, long hair, noble face, beautiful, detailed eyes, embroidered light armor, holding greatsword, determined expression, fantasy setting
+
+    Now, generate the prompt for the provided character profile.
+  `;
+
+  try {
+    const response = await client.post('/chat/completions', {
+      model: openRouter.model, // Use the general text model
+      messages: [
+        { role: 'system', content: 'You are an AI assistant that generates a comma-separated Stable Diffusion prompt in English from a JSON character profile. You only output the prompt keywords.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error calling OpenRouter API for SD prompt generation:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   updateCharacterProfile,
   generateCharacterDiary,
   generateCharacterImage,
+  generateSdPrompt,
 };
