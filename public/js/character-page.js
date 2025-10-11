@@ -19,28 +19,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let diaryEntries = []; // Stores sorted diary file names
     let currentDiaryIndex = 0;
 
-    // Image elements
-    const imageContainer = document.querySelector('.character-image-container');
-    const imageHistoryGallery = document.querySelector('.image-history-gallery');
-    const imageGalleryModal = document.getElementById('image-gallery-modal');
-    const imageModalClose = document.querySelector('.image-modal-close');
-    const modalImage = document.getElementById('modal-image');
-    const prevButton = document.querySelector('.nav-button.prev-button');
-    const nextButton = document.querySelector('.nav-button.next-button');
+    // Media elements
+    const mediaHistoryGallery = document.querySelector('.image-history-gallery');
+    const mediaGalleryModal = document.getElementById('image-gallery-modal');
+    const mediaModalClose = document.querySelector('.image-modal-close');
+    const modalMediaImage = document.getElementById('modal-image');
+    const modalMediaVideo = document.getElementById('modal-video');
+    const prevButton = mediaGalleryModal.querySelector('.prev-button');
+    const nextButton = mediaGalleryModal.querySelector('.next-button');
 
-    let imageHistory = [];
-    let currentImageIndex = 0;
+    let mediaHistory = [];
+    let currentMediaIndex = 0;
 
     // SD Prompt elements
     const generatePromptBtn = document.getElementById('generate-prompt-btn');
     const promptArea = document.getElementById('generated-prompt-area');
 
-    // Initialize image history from data attribute
-    if (imageHistoryGallery && imageHistoryGallery.dataset.imageHistory) {
+    // Initialize media history from data attribute
+    if (mediaHistoryGallery && mediaHistoryGallery.dataset.mediaHistory) {
         try {
-            imageHistory = JSON.parse(imageHistoryGallery.dataset.imageHistory);
+            mediaHistory = JSON.parse(mediaHistoryGallery.dataset.mediaHistory);
         } catch (e) {
-            console.error("Error parsing image history data:", e);
+            console.error("Error parsing media history data:", e);
         }
     }
 
@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const fileLinks = diaryEntries.map((file, index) => {
                 const displayName = file.replace(/_/g, ' ').replace('.html', '');
-                // Store index in data attribute for easy lookup
                 return `<li><a href="javascript:void(0)" data-diary-index="${index}">${displayName}</a></li>`;
             }).join('');
             diaryList.innerHTML = `<ul>${fileLinks}</ul>`;
@@ -106,42 +105,69 @@ document.addEventListener('DOMContentLoaded', () => {
     diaryPrevButton.addEventListener('click', () => navigateDiary(-1));
     diaryNextButton.addEventListener('click', () => navigateDiary(1));
 
-    // --- Image Gallery Logic ---
-    function openImageModal(index) {
-        currentImageIndex = index;
-        modalImage.src = imageHistory[currentImageIndex];
-        imageGalleryModal.style.display = 'flex';
-        updateImageNavButtons();
+    // --- Media Gallery Logic ---
+    function openMediaModal(index) {
+        currentMediaIndex = index;
+        const mediaPath = mediaHistory[currentMediaIndex];
+        const isVideo = mediaPath.toLowerCase().endsWith('.mp4');
+
+        // Pause any playing media before switching
+        modalMediaImage.src = '';
+        modalMediaVideo.pause();
+        modalMediaVideo.src = '';
+
+        if (isVideo) {
+            modalMediaImage.style.display = 'none';
+            modalMediaVideo.style.display = 'block';
+            modalMediaVideo.src = mediaPath;
+            modalMediaVideo.play();
+        } else {
+            modalMediaVideo.style.display = 'none';
+            modalMediaImage.style.display = 'block';
+            modalMediaImage.src = mediaPath;
+        }
+        
+        mediaGalleryModal.style.display = 'flex';
+        updateMediaNavButtons();
     }
 
-    function navigateImage(direction) {
-        currentImageIndex += direction;
-        modalImage.src = imageHistory[currentImageIndex];
-        updateImageNavButtons();
+    function navigateMedia(direction) {
+        const newIndex = currentMediaIndex + direction;
+        if (newIndex >= 0 && newIndex < mediaHistory.length) {
+            openMediaModal(newIndex);
+        }
     }
 
-    function updateImageNavButtons() {
-        prevButton.disabled = currentImageIndex === 0;
-        nextButton.disabled = currentImageIndex === imageHistory.length - 1;
+    function updateMediaNavButtons() {
+        prevButton.disabled = currentMediaIndex === 0;
+        nextButton.disabled = currentMediaIndex === mediaHistory.length - 1;
     }
 
-    imageHistoryGallery.addEventListener('click', (e) => {
-        if (e.target.tagName === 'IMG') {
-            const clickedSrc = e.target.src;
-            // Remove the base URL to match the stored paths
-            const baseUrl = window.location.origin;
-            const relativeSrc = clickedSrc.replace(baseUrl, '').split('?')[0]; // Remove cache-busting param
-            const index = imageHistory.indexOf(relativeSrc);
+    mediaHistoryGallery.addEventListener('click', (e) => {
+        const clickedItem = e.target.closest('img, .video-thumb');
+        if (clickedItem) {
+            // Find the index of the clicked item by its position in the gallery
+            const allItems = Array.from(mediaHistoryGallery.children);
+            const index = allItems.indexOf(clickedItem);
             if (index !== -1) {
-                openImageModal(index);
+                openMediaModal(index);
             }
         }
     });
 
-    prevButton.addEventListener('click', () => navigateImage(-1));
-    nextButton.addEventListener('click', () => navigateImage(1));
-    imageModalClose.addEventListener('click', () => imageGalleryModal.style.display = 'none');
-    imageGalleryModal.addEventListener('click', (e) => { if (e.target === imageGalleryModal) { imageGalleryModal.style.display = 'none'; } });
+    function closeMediaModal() {
+        mediaGalleryModal.style.display = 'none';
+        modalMediaVideo.pause(); // Stop video playback on close
+    }
+
+    prevButton.addEventListener('click', () => navigateMedia(-1));
+    nextButton.addEventListener('click', () => navigateMedia(1));
+    mediaModalClose.addEventListener('click', closeMediaModal);
+    mediaGalleryModal.addEventListener('click', (e) => { 
+        if (e.target === mediaGalleryModal) { 
+            closeMediaModal(); 
+        }
+    });
 
     // --- Action Buttons Logic ---
     generateDiaryBtn.addEventListener('click', async () => {
