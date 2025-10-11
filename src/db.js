@@ -31,57 +31,53 @@ function getCharacterEvents(actorUUID, callback) {
   const latestTimestampQuery = `
     SELECT MAX(game_time) AS latest_time
     FROM events
-    WHERE originating_actor_UUID = ?`;
+    WHERE CAST(originating_actor_UUID AS TEXT) = ? OR CAST(target_actor_UUID AS TEXT) = ?`;
 
-  db.get(latestTimestampQuery, [actorUUID], (err, row) => {
-    if (err) {
-      console.error('Error fetching latest event timestamp:', err.message);
-      return callback(err, null);
-    }
-
-    if (!row || !row.latest_time) {
-      // Fallback for characters with no events, though unlikely.
+  db.get(latestTimestampQuery, [actorUUID, actorUUID], (err, row) => {
+    if (err || !row || !row.latest_time) {
+      console.log(`[DB] No events found for actor ${actorUUID} to set a time window. Returning empty.`);
       return callback(null, []);
     }
 
     const latestTimestamp = row.latest_time;
-    const oneDayInSeconds = 86400; // 24 * 60 * 60
+    const twoDaysInGameSeconds = 2 * 86400; // 48 hours in seconds
 
-    // Step 2: Calculate the time window for "yesterday" and "the day before yesterday" relative to the last event.
-    const startOfLatestDay = Math.floor(latestTimestamp / oneDayInSeconds) * oneDayInSeconds;
-    const endOfWindow = startOfLatestDay; // Exclusive: up to the beginning of the latest day.
-    const startOfWindow = endOfWindow - (2 * oneDayInSeconds); // Inclusive: from the beginning of the day before yesterday.
+    // Simplified time window: Get all events in the 48 hours leading up to the last event.
+    const endOfWindow = latestTimestamp;
+    const startOfWindow = endOfWindow - twoDaysInGameSeconds;
 
-    // Step 3: Fetch all events (including direct_narration) that fall within this two-day window.
+    // Step 2: Fetch all events where the character is involved (or it's narration) within the new window.
     const eventsQuery = `
       SELECT *
       FROM events
-      WHERE (originating_actor_UUID = ? OR event_type = 'direct_narration')
+      WHERE ((CAST(originating_actor_UUID AS TEXT) = ? OR CAST(target_actor_UUID AS TEXT) = ?) OR event_type = 'direct_narration')
         AND game_time >= ?
-        AND game_time < ?
+        AND game_time <= ?
       ORDER BY game_time ASC`;
 
-    db.all(eventsQuery, [actorUUID, startOfWindow, endOfWindow], (err, rows) => {
+    db.all(eventsQuery, [actorUUID, actorUUID, startOfWindow, endOfWindow], (err, rows) => {
       if (err) {
         console.error('Error fetching events for the last two days:', err.message);
         return callback(err, null);
       }
-      console.log(`[DB] Found ${rows.length} events in the last two days for actor ${actorUUID}.`);
+      console.log(`[DB] Found ${rows.length} events in the last 48 hours for actor ${actorUUID}.`);
       callback(null, rows);
     });
   });
 }
 
 function getEventsForDiary(actorUUID, callback) {
+  const condition = `(CAST(originating_actor_UUID AS TEXT) = ? OR CAST(target_actor_UUID AS TEXT) = ?)`;
+
   const lastDayQuery = `
     SELECT game_time_str
     FROM events
-    WHERE originating_actor_UUID = ?
+    WHERE ${condition}
     ORDER BY game_time DESC
     LIMIT 1
   `;
 
-  db.get(lastDayQuery, [actorUUID], (err, lastEvent) => {
+  db.get(lastDayQuery, [actorUUID, actorUUID], (err, lastEvent) => {
     if (err) {
       console.error('Error fetching last event for diary:', err.message);
       return callback(err, null);
@@ -95,17 +91,18 @@ function getEventsForDiary(actorUUID, callback) {
     const previousDayQuery = `
       SELECT game_time_str
       FROM events
-      WHERE originating_actor_UUID = ? AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) != ?
+      WHERE ${condition} AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) != ?
       ORDER BY game_time DESC
       LIMIT 1
     `;
 
-    db.get(previousDayQuery, [actorUUID, lastDayStr], (err, previousEvent) => {
+    db.get(previousDayQuery, [actorUUID, actorUUID, lastDayStr], (err, previousEvent) => {
       if (err) {
         console.error('Error fetching previous day event for diary:', err.message);
         return callback(err, null);
       }
       if (!previousEvent) {
+        console.log(`[DB] Only one day of events found for actor ${actorUUID}. Cannot generate diary for a 'previous' day.`);
         return callback(null, []); // Only one day of events exists
       }
 
@@ -114,15 +111,16 @@ function getEventsForDiary(actorUUID, callback) {
       const diaryEventsQuery = `
         SELECT *
         FROM events
-        WHERE (originating_actor_UUID = ? OR event_type = 'direct_narration') AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) = ?
+        WHERE (${condition} OR event_type = 'direct_narration') AND SUBSTR(game_time_str, INSTR(game_time_str, ',') + 2) = ?
         ORDER BY game_time ASC
       `;
 
-      db.all(diaryEventsQuery, [actorUUID, previousDayStr], (err, events) => {
+      db.all(diaryEventsQuery, [actorUUID, actorUUID, previousDayStr], (err, events) => {
         if (err) {
           console.error('Error fetching diary events:', err.message);
           return callback(err, null);
         }
+        console.log(`[DB] Found ${events.length} events for diary on day '${previousDayStr}' for actor ${actorUUID}.`);
         callback(null, events);
       });
     });
