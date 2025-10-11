@@ -243,4 +243,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { processCharacter };
+module.exports = { processCharacter, formatProfileToTxt };

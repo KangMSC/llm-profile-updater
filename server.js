@@ -5,7 +5,7 @@ const multer = require('multer');
 const db = require('./src/db');
 const { charactersToUpdate } = require('./src/config');
 const { processCharacterForDiary } = require('./src/diary');
-const { processCharacter } = require('./src/main');
+const { processCharacter, formatProfileToTxt } = require('./src/main');
 const { generateSdPrompt } = require('./src/llm');
 
 const app = express();
@@ -13,6 +13,7 @@ const PORT = 3001;
 
 const PROFILES_DIR = path.join(__dirname, 'profiles');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const GENERATED_PROFILES_DIR = path.join(__dirname, 'generated-profiles');
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
@@ -352,6 +353,12 @@ app.post('/api/profiles/:characterName/generate', async (req, res) => {
         const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
         await fs.mkdir(PROFILES_DIR, { recursive: true }); // Ensure the directory exists
         await fs.writeFile(profilePath, JSON.stringify(newProfile, null, 2));
+
+        // Also generate the .txt profile
+        const generatedTxtPath = path.join(GENERATED_PROFILES_DIR, `${characterName}.txt`);
+        const txtContent = formatProfileToTxt(newProfile);
+        await fs.mkdir(GENERATED_PROFILES_DIR, { recursive: true });
+        await fs.writeFile(generatedTxtPath, txtContent, 'utf-8');
 
         res.json({ message: `Initial profile for ${characterName} generated successfully.` });
 
