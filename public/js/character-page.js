@@ -173,6 +173,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const generateInitialProfileBtn = document.getElementById('generate-initial-profile-btn');
+    const initialProfilePrompt = document.getElementById('initial-profile-prompt');
+    const initialProfileStatus = document.getElementById('initial-profile-status');
+
+    if (generateInitialProfileBtn) {
+        generateInitialProfileBtn.addEventListener('click', async () => {
+            const prompt = initialProfilePrompt.value;
+            if (!prompt.trim()) {
+                initialProfileStatus.textContent = 'Please enter a description for the character.';
+                return;
+            }
+
+            generateInitialProfileBtn.disabled = true;
+            initialProfileStatus.textContent = 'Generating initial profile...';
+
+            try {
+                const response = await fetch(`/api/profiles/${characterName}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.message || 'Failed to generate initial profile.');
+                }
+
+                initialProfileStatus.textContent = 'Profile generated successfully! Reloading...';
+                setTimeout(() => location.reload(), 2000);
+
+            } catch (error) {
+                initialProfileStatus.textContent = `Error: ${error.message}`;
+                generateInitialProfileBtn.disabled = false;
+            }
+        });
+    }
+
     if (generatePromptBtn) {
         generatePromptBtn.addEventListener('click', async () => {
             generatePromptBtn.disabled = true;

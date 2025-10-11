@@ -465,9 +465,14 @@ app.get('/characters/:characterName', async (req, res) => {
                     <div class="diary-column">
                         <h2>Actions</h2>
                         <button id="update-profile-btn">Update Profile</button>
-                         <div id="profile-status"></div>
+                        <div id="profile-status"></div>
                         <button id="generate-diary-btn">Generate Today's Diary</button>
                         <div id="diary-status"></div>
+
+                        <h2 style="margin-top: 2rem;">Initial Profile Generation</h2>
+                        <textarea id="initial-profile-prompt" rows="5" placeholder="Enter a brief description or keywords for the character..."></textarea>
+                        <button id="generate-initial-profile-btn">Generate Initial Profile</button>
+                        <div id="initial-profile-status"></div>
 
                         <h2 style="margin-top: 2rem;">Stable Diffusion</h2>
                         <button id="generate-prompt-btn">Generate SD Prompt</button>
@@ -540,6 +545,31 @@ app.post('/api/profiles/:characterName/update', async (req, res) => {
         res.status(500).json({ message: 'Profile update failed.' });
     } finally {
         db.close();
+    }
+});
+
+app.post('/api/profiles/:characterName/generate', async (req, res) => {
+    const { characterName } = req.params;
+    const { prompt } = req.body;
+
+    if (!prompt) {
+        return res.status(400).json({ message: 'Prompt is required.' });
+    }
+
+    try {
+        // This function will be created in the next step
+        const { generateInitialProfile } = require('./src/llm');
+        const newProfile = await generateInitialProfile(characterName, prompt);
+
+        const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
+        await fs.mkdir(PROFILES_DIR, { recursive: true }); // Ensure the directory exists
+        await fs.writeFile(profilePath, JSON.stringify(newProfile, null, 2));
+
+        res.json({ message: `Initial profile for ${characterName} generated successfully.` });
+
+    } catch (error) {
+        console.error(`Failed to generate initial profile for ${characterName}:`, error);
+        res.status(500).json({ message: error.message || 'Failed to generate initial profile.' });
     }
 });
 

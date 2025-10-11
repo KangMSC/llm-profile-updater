@@ -246,9 +246,90 @@ async function generateSdPrompt(profileJson) {
   }
 }
 
+async function generateInitialProfile(characterName, userPrompt) {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  const defaultProfileKeys = [
+    'summary', 'interject_summary', 'background', 'personality', 'appearance',
+    'aspirations', 'relationships', 'occupation', 'skills', 'speech_style'
+  ];
+
+  let finalKeys = defaultProfileKeys;
+
+  try {
+    const instructionsPath = path.join(__dirname, '..', 'profile-instructions.json');
+    const instructionsJson = await fs.readFile(instructionsPath, 'utf-8');
+    const instructions = JSON.parse(instructionsJson);
+    if (instructions[characterName]) {
+      const customKeys = Object.keys(instructions[characterName]);
+      finalKeys = [...new Set([...defaultProfileKeys, ...customKeys])]; // Merge and deduplicate
+    }
+  } catch (error) {
+    console.warn('[LLM] Could not read profile-instructions.json or no specific instructions for character. Using default profile structure.');
+  }
+
+  const prompt = `
+    You are a world-class fantasy writer. Your task is to create a detailed character profile for a new character in a fantasy world.
+    The character's name is "${characterName}".
+    The user has provided the following initial description or keywords:
+    "${userPrompt}"
+
+    Based on this, generate a complete and coherent character profile as a JSON object.
+    The JSON object MUST contain all of the following keys, and only these keys:
+    - ${finalKeys.join('\n    - ')}
+
+    **Instructions for Content:**
+    - All field values must be in Korean.
+    - **summary**: A brief, one-paragraph summary of the character.
+    - **interject_summary**: A very short summary (1-2 sentences) of how the character might interrupt or add to a conversation.
+    - **background**: The character's history and backstory.
+    - **personality**: Key personality traits.
+    - **appearance**: Detailed physical appearance, including clothing and equipment.
+    - **aspirations**: The character's goals and dreams.
+    - **relationships**: An array of objects, each with 'name' and 'status' keys (e.g., { "name": "Elara", "status": "Childhood friend" }). If none, use an empty array \`[]\`.
+    - **occupation**: The character's job or primary role.
+    - **skills**: An array of key skills or abilities (e.g., ["Swordsmanship", "Alchemy"]). If none, use an empty array \`[]\`.
+    - **speech_style**: A description of how the character speaks.
+    - For any other custom fields, generate appropriate content based on the field name and the user's prompt.
+
+    Your output MUST be only the raw JSON object, without any surrounding text or markdown formatting.
+  `;
+
+  try {
+    const response = await client.post('/chat/completions', {
+      model: openRouter.model,
+      messages: [
+        { role: 'system', content: 'You are an AI assistant that generates a character\'s JSON profile in Korean. You must only output the raw JSON object. The returned JSON must contain exactly the keys specified in the user prompt.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    let content = response.data.choices[0].message.content;
+
+    // Attempt to clean up markdown fences if they exist
+    const jsonMatch = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
+    if (jsonMatch && jsonMatch[1]) {
+      content = jsonMatch[1];
+    }
+
+    // Return the parsed object
+    return JSON.parse(content);
+
+  } catch (error) {
+    console.error('Error calling OpenRouter API for initial profile generation:', error.response ? error.response.data : error.message);
+    if (error instanceof SyntaxError) {
+        console.error("Failed to parse LLM response as JSON. Raw response:", response.data.choices[0].message.content);
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   updateCharacterProfile,
   generateCharacterDiary,
   generateCharacterImage,
   generateSdPrompt,
+  generateInitialProfile,
 };
+
