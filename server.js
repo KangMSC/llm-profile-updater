@@ -346,9 +346,26 @@ app.post('/api/profiles/:characterName/generate', async (req, res) => {
     }
 
     try {
-        // This function will be created in the next step
         const { generateInitialProfile } = require('./src/llm');
-        const newProfile = await generateInitialProfile(characterName, prompt);
+
+        // Logic to determine allKeys and customKeys from instructions
+        const defaultProfileKeys = ['summary', 'interject_summary', 'background', 'personality', 'appearance', 'aspirations', 'relationships', 'occupation', 'skills', 'speech_style'];
+        let allKeys = defaultProfileKeys;
+        let customKeys = [];
+        try {
+            const instructionsPath = path.join(__dirname, 'profile-instructions.json');
+            const instructionsJson = await fs.readFile(instructionsPath, 'utf-8');
+            const instructions = JSON.parse(instructionsJson);
+            if (instructions[characterName]) {
+                const specificCustomKeys = Object.keys(instructions[characterName]);
+                allKeys = [...new Set([...defaultProfileKeys, ...specificCustomKeys])];
+                customKeys = specificCustomKeys;
+            }
+        } catch (e) {
+            console.warn(`[Server] Could not read instructions for ${characterName}, using default keys.`);
+        }
+
+        const newProfile = await generateInitialProfile(characterName, prompt, allKeys, customKeys);
 
         const profilePath = path.join(PROFILES_DIR, `${characterName}.json`);
         await fs.mkdir(PROFILES_DIR, { recursive: true }); // Ensure the directory exists

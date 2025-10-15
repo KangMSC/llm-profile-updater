@@ -169,7 +169,8 @@ async function processCharacter(actorName) {
           if (characterInstructions) {
             console.log(`[Updater] Found specific instructions for ${actorName}.`);
           }
-          const llmResponse = await llm.updateCharacterProfile(actorName, events, JSON.stringify(existingProfile, null, 2), characterInstructions);
+          const customKeys = characterInstructions ? Object.keys(characterInstructions) : [];
+          const llmResponse = await llm.updateCharacterProfile(actorName, events, JSON.stringify(existingProfile, null, 2), characterInstructions, customKeys);
 
           let updatedProfile;
           try {

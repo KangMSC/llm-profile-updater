@@ -9,7 +9,7 @@ const client = axios.create({
   },
 });
 
-async function updateCharacterProfile(characterName, events, existingProfileJson, instructions) {
+async function updateCharacterProfile(characterName, events, existingProfileJson, instructions, customKeys = []) {
   const formattedEvents = events.map(event => {
     let eventDetails = `Type: ${event.event_type}, Location: ${event.location}, Time: ${event.game_time_str}`;
     let data = event.event_data;
@@ -42,6 +42,10 @@ async function updateCharacterProfile(characterName, events, existingProfileJson
     ? `\n\n**CHARACTER-SPECIFIC INSTRUCTIONS**\nWhen updating the profile, you MUST also follow these character-specific instructions:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
     : '';
 
+  const customKeysString = customKeys && customKeys.length > 0
+    ? `\n\n**USER-DEFINED CUSTOM FIELDS**\nThe following fields were specially defined by the user: [${customKeys.join(', ')}]. Pay close attention to these fields, ensuring their content is creative, detailed, and reflects the character's unique identity.`
+    : '';
+
   const profile = JSON.parse(existingProfileJson);
   const requiredKeys = Object.keys(profile);
 
@@ -58,6 +62,7 @@ ${formattedEvents}
 
 ${globalRulesString}
 ${instructionsString}
+${customKeysString}
 
 Based on the new events and ALL instructions provided (both global and specific), update the values for all keys in the JSON profile.
 If a field has an instruction, generate the content for it based on the instruction.
@@ -85,7 +90,7 @@ The final JSON object must include all of the following keys, and only these key
   }
 }
 
-async function generateCharacterDiary(characterName, events, profileJson) {
+async function generateCharacterDiary(characterName, events, profileJson, customKeys = []) {
   const formattedEvents = events.map(event => {
     let eventDetails = `Type: ${event.event_type}, Location: ${event.location}, Time: ${event.game_time_str}`;
     let data = event.event_data;
@@ -109,6 +114,10 @@ ${profileJson}
 \`\`\`
 ` : '';
 
+  const customKeysString = customKeys && customKeys.length > 0
+    ? `When writing, pay special attention to the following user-defined aspects of your profile: [${customKeys.join(', ')}]. Make sure your thoughts and feelings reflect these unique traits.`
+    : '';
+
   const prompt = `
 You are the character '${characterName}'. I will provide you with a sequence of events that happened to you on a specific day.
 Your task is to write a personal and reflective diary entry in the first person ("I", "me", "my").
@@ -116,6 +125,7 @@ The diary should be written entirely in Korean.
 Do not simply list the events. Instead, weave them into a narrative, describing your feelings, thoughts, and reactions to what happened.
 The tone of the diary should reflect your personality as suggested by your actions, dialogues, and internal thoughts within the events.
 ${profileInfo}
+${customKeysString}
 
 **IMPORTANT FORMATTING RULES:**
 1. The entire output must be a simple HTML snippet.
@@ -246,28 +256,10 @@ async function generateSdPrompt(profileJson) {
   }
 }
 
-async function generateInitialProfile(characterName, userPrompt) {
-  const fs = require('fs').promises;
-  const path = require('path');
-
-  const defaultProfileKeys = [
-    'summary', 'interject_summary', 'background', 'personality', 'appearance',
-    'aspirations', 'relationships', 'occupation', 'skills', 'speech_style'
-  ];
-
-  let finalKeys = defaultProfileKeys;
-
-  try {
-    const instructionsPath = path.join(__dirname, '..', 'profile-instructions.json');
-    const instructionsJson = await fs.readFile(instructionsPath, 'utf-8');
-    const instructions = JSON.parse(instructionsJson);
-    if (instructions[characterName]) {
-      const customKeys = Object.keys(instructions[characterName]);
-      finalKeys = [...new Set([...defaultProfileKeys, ...customKeys])]; // Merge and deduplicate
-    }
-  } catch (error) {
-    console.warn('[LLM] Could not read profile-instructions.json or no specific instructions for character. Using default profile structure.');
-  }
+async function generateInitialProfile(characterName, userPrompt, allKeys, customKeys = []) {
+  const customKeysString = customKeys && customKeys.length > 0
+    ? `\n\n**USER-DEFINED CUSTOM FIELDS**\nThe following fields were specially defined by the user: [${customKeys.join(', ')}]. Pay close attention to these fields, ensuring their content is creative, detailed, and reflects the character's unique identity.`
+    : '';
 
   const prompt = `
     You are a world-class fantasy writer. Your task is to create a detailed character profile for a new character in a fantasy world.
@@ -277,7 +269,7 @@ async function generateInitialProfile(characterName, userPrompt) {
 
     Based on this, generate a complete and coherent character profile as a JSON object.
     The JSON object MUST contain all of the following keys, and only these keys:
-    - ${finalKeys.join('\n    - ')}
+    - ${allKeys.join('\n    - ')}
 
     **Instructions for Content:**
     - All field values must be in Korean.
@@ -292,6 +284,7 @@ async function generateInitialProfile(characterName, userPrompt) {
     - **skills**: An array of key skills or abilities (e.g., ["Swordsmanship", "Alchemy"]). If none, use an empty array \`[]\`.
     - **speech_style**: A description of how the character speaks.
     - For any other custom fields, generate appropriate content based on the field name and the user's prompt.
+    ${customKeysString}
 
     Your output MUST be only the raw JSON object, without any surrounding text or markdown formatting.
   `;

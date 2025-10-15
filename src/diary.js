@@ -66,7 +66,19 @@ async function processCharacterForDiary(actorName) {
 
           const diaryPath = path.join(characterDiaryDir, diaryFileName);
 
-          const diaryContent = await llm.generateCharacterDiary(actorName, events, profileJson);
+          // Read instructions to find custom keys
+          let customKeys = [];
+          try {
+            const instructionsRaw = await fs.readFile(path.join(__dirname, '..', 'profile-instructions.json'), 'utf-8');
+            const instructions = JSON.parse(instructionsRaw);
+            if (instructions[actorName]) {
+              customKeys = Object.keys(instructions[actorName]);
+            }
+          } catch (e) {
+            console.log(`[Diary] Could not read instructions for ${actorName}, proceeding without custom keys.`);
+          }
+
+          const diaryContent = await llm.generateCharacterDiary(actorName, events, profileJson, customKeys);
           
           if (!diaryContent) {
               console.error(`[Diary] LLM returned no content for ${actorName}. Skipping file write.`);
