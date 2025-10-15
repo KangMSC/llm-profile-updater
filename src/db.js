@@ -16,7 +16,7 @@ function connect() {
 }
 
 function getActorUUID(actorName, callback) {
-  const query = `SELECT id, CAST(uuid AS TEXT) AS uuid FROM main.uuid_mappings WHERE actor_name = ? ORDER BY updated_at DESC LIMIT 1`;
+  const query = `SELECT id, CAST(uuid AS TEXT) AS uuid FROM main.uuid_mappings WHERE actor_name = ? ORDER BY updated_at ASC LIMIT 1`;
   db.get(query, [actorName], (err, row) => {
     if (err) {
       console.error(`Error fetching UUID for ${actorName}:`, err.message);

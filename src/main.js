@@ -82,7 +82,7 @@ function formatProfileToTxt(profile) {
       
       for (let i = 0; i < customKeys.length; i++) {
           const key = customKeys[i];
-          customContent += `### ${key}\n`;
+          customContent += `* ${key}\n`;
           const value = profile[key];
           
           if (Array.isArray(value)) {
