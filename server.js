@@ -7,6 +7,7 @@ const { charactersToUpdate } = require('./src/config');
 const { processCharacterForDiary } = require('./src/diary');
 const { processCharacter, formatProfileToTxt } = require('./src/main');
 const { generateSdPrompt } = require('./src/llm');
+const logger = require('./src/logger');
 
 const app = express();
 const PORT = 3001;
@@ -182,6 +183,43 @@ app.get('/characters/:characterName', async (req, res) => {
         mediaBlockHtml = `<div class="character-image-container"></div>`; // Empty container
     }
 
+    // --- Fetch LLM Logs ---
+    const actions = [
+        { key: 'update_profile', label: 'Profile Update' },
+        { key: 'generate_initial_profile', label: 'Initial Profile Generation' },
+        { key: 'generate_diary', label: 'Diary Generation' },
+        { key: 'generate_sd_prompt', label: 'SD Prompt Generation' },
+    ];
+    let llmLogsHtml = '';
+    for (const action of actions) {
+        const promptLog = await logger.readLog(characterName, 'prompt', action.key);
+        const errorLog = await logger.readLog(characterName, 'error', action.key);
+
+        if (promptLog || errorLog) {
+            llmLogsHtml += `<div class="llm-log-section">
+                <details>
+                    <summary>${action.label}</summary>
+                    <div class="log-content">
+            `;
+            if (errorLog) {
+                llmLogsHtml += `
+                        <h4>Error</h4>
+                        <pre class="error-log"><code>${errorLog}</code></pre>
+                `;
+            }
+            if (promptLog) {
+                llmLogsHtml += `
+                        <h4>Last Prompt</h4>
+                        <pre><code>${promptLog}</code></pre>
+                `;
+            }
+            llmLogsHtml += `
+                    </div>
+                </details>
+            </div>`;
+        }
+    }
+
     const profileHtml = renderProfileHtml(profile, profileExists);
     const template = `
         <!DOCTYPE html>
@@ -229,6 +267,12 @@ app.get('/characters/:characterName', async (req, res) => {
                 .image-modal-content { padding: 20px; }
                 #modal-image, #modal-video { width: 100%; height: 100%; object-fit: contain; max-height: calc(90vh - 80px); }
                 #modal-video { display: none; }
+                .llm-log-section details { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+                .llm-log-section summary { cursor: pointer; padding: 8px; background-color: #f7f7f7; font-weight: bold; }
+                .llm-log-section .log-content { padding: 10px; border-top: 1px solid #ddd; }
+                .llm-log-section h4 { margin-top: 0; margin-bottom: 5px; font-size: 1rem; color: #555; }
+                .llm-log-section pre { background-color: #fdfdfd; border: 1px solid #eee; border-radius: 4px; padding: 10px; white-space: pre-wrap; word-wrap: break-word; font-size: 0.85rem; }
+                .llm-log-section pre.error-log { border-left: 3px solid #d9534f; background-color: #fcf2f2; }
             </style>
         </head>
         <body data-character-name='${characterName}'>
@@ -271,6 +315,9 @@ app.get('/characters/:characterName', async (req, res) => {
 
                         <h2 style="margin-top: 2rem;">Diary</h2>
                         <div id="diary-list"></div>
+
+                        <h2 style="margin-top: 2rem;">LLM Logs</h2>
+                        <div id="llm-logs">${llmLogsHtml}</div>
                     </div>
                 </div>
                 <a href="/" class="back-link">Back to Character List</a>
@@ -330,8 +377,8 @@ app.post('/api/profiles/:characterName/update', async (req, res) => {
         await processCharacter(characterName);
         res.json({ message: `Profile update completed successfully.` });
     } catch (error) {
-        console.error('Profile update failed:', error);
-        res.status(500).json({ message: 'Profile update failed.' });
+        // The error is already logged by the llm module, so we just send a generic failure message.
+        res.status(500).json({ message: 'Profile update failed. Check LLM logs for details.' });
     } finally {
         db.close();
     }
@@ -380,8 +427,8 @@ app.post('/api/profiles/:characterName/generate', async (req, res) => {
         res.json({ message: `Initial profile for ${characterName} generated successfully.` });
 
     } catch (error) {
-        console.error(`Failed to generate initial profile for ${characterName}:`, error);
-        res.status(500).json({ message: error.message || 'Failed to generate initial profile.' });
+        // Error is logged in llm.js
+        res.status(500).json({ message: error.message || 'Failed to generate initial profile. Check LLM logs for details.' });
     }
 });
 
@@ -413,7 +460,7 @@ app.post('/api/diaries/:characterName/generate', async (req, res) => {
         await processCharacterForDiary(characterName);
         res.json({ message: `Diary generation completed successfully.` });
     } catch (error) {
-        res.status(500).json({ message: 'Diary generation failed.' });
+        res.status(500).json({ message: 'Diary generation failed. Check LLM logs for details.' });
     } finally {
         db.close();
     }
@@ -427,14 +474,15 @@ app.get('/api/prompts/:characterName/generate', async (req, res) => {
 
     try {
         const profileJson = await fs.readFile(profilePath, 'utf-8');
-        const prompt = await generateSdPrompt(profileJson);
+        // This function in llm.js needs the character name for logging
+        const prompt = await generateSdPrompt(characterName, profileJson);
         res.json({ prompt });
     } catch (error) {
         if (error.code === 'ENOENT') {
             return res.status(404).json({ message: 'Profile not found.' });
         }
         console.error(`[Prompt Gen] Failed to generate prompt for ${characterName}:`, error);
-        res.status(500).json({ message: 'Prompt generation failed.' });
+        res.status(500).json({ message: 'Prompt generation failed. Check LLM logs for details.' });
     }
 });
 
