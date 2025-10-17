@@ -223,50 +223,9 @@ async function generateInitialProfile(characterName, userPrompt, allKeys, custom
   }
 }
 
-// This function is no longer actively used in the UI but is kept for potential future use.
-async function generateCharacterImage(prompt) {
-  const enhancedPrompt = `${prompt}, digital painting, portrait, fantasy art, detailed, high quality, sharp focus`;
-
-  const requestPayload = {
-    model: openRouter.imageModel,
-    messages: [
-      { role: 'user', content: enhancedPrompt }
-    ],
-  };
-
-  try {
-    const response = await client.post('/chat/completions', requestPayload);
-
-    if (response.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url) {
-      const dataUrl = response.data.choices[0].message.images[0].image_url.url;
-      console.log('[Image Gen LLM] Received data URL from OpenRouter.');
-      const parts = dataUrl.split(',');
-      if (parts.length === 2 && parts[0].startsWith('data:image')) {
-        const base64Data = parts[1];
-        if (!base64Data) {
-            throw new Error('Extracted base64 data is empty.');
-        }
-        return base64Data;
-      }
-      throw new Error(`Unexpected data URL format: ${dataUrl.substring(0, 100)}...`);
-    } else {
-      console.error('[Image Gen LLM] Failed to find image URL in response:', JSON.stringify(response.data, null, 2));
-      throw new Error('No image data found in the expected location in OpenRouter response.');
-    }
-  } catch (error) {
-    if (error.response) {
-        console.error('[Image Gen LLM] Full error response from OpenRouter:', JSON.stringify(error.response.data, null, 2));
-    }
-    console.error('Error calling OpenRouter Image API:', error.message);
-    throw error;
-  }
-}
-
-
 module.exports = {
   updateCharacterProfile,
   generateCharacterDiary,
-  generateCharacterImage,
   generateSdPrompt,
   generateInitialProfile,
 };
