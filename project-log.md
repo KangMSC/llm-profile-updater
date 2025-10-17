@@ -313,3 +313,15 @@
 1.  **`TypeError: formatProfileToTxt is not a function` 해결**:
     *   **문제**: 기능 구현 직후, `server.js`가 `formatProfileToTxt` 함수를 찾지 못해 타입 에러가 발생했습니다. 원인은 `src/main.js`에서 해당 함수를 `export` 하지 않았기 때문입니다.
     *   **해결**: `src/main.js`의 `module.exports`에 `formatProfileToTxt`를 추가하여, `server.js`가 함수를 정상적으로 `require` 할 수 있도록 수정했습니다.
+---
+
+## 2025년 10월 16일 - LLM 프롬프트 개선: 커스텀 필드 명시적 강조
+
+### 기능 개선
+
+1.  **커스텀 필드에 대한 LLM의 인식 강화**:
+    -   **목표**: LLM이 `profile-instructions.json`에 정의된 사용자 지정 커스텀 필드의 중요성을 명확히 인지하고, 더 창의적이고 상세한 내용을 생성하도록 유도했습니다.
+    -   **구현 내용**:
+        1.  **프롬프트 동적 수정**: 프로필 업데이트, 일기 생성, 최초 프로필 생성 시 사용되는 모든 LLM 프롬프트에 `**USER-DEFINED CUSTOM FIELDS**` 섹션을 동적으로 추가하도록 `src/llm.js`를 수정했습니다.
+        2.  **커스텀 키 명시적 전달**: 이 새로운 섹션에는 사용자가 정의한 커스텀 필드의 키 목록이 명시적으로 포함되며, LLM에게 해당 필드들에 특히 주의를 기울이라는 지침이 전달됩니다.
+        3.  **호출 로직 수정**: `src/main.js`, `src/diary.js`, `server.js`에서 `profile-instructions.json`을 읽어 커스텀 키를 추출하고, 이를 `llm.js`의 관련 함수(`updateCharacterProfile`, `generateCharacterDiary`, `generateInitialProfile`)에 인자로 전달하도록 수정했습니다.
