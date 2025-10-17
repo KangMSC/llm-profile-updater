@@ -1,0 +1,8 @@
+{
+  "base_rules": [
+    "`summary`, `interject_summary`, `personality`, `occupation`, `skills`, `speech_style` 필드는 단순히 새 텍스트를 추가하지 마세요. 새로운 이벤트가 중대한 변화를 일으킬 경우에만 기존 내용을 미묘하게 수정하세요. 설명은 간결하게 유지하세요.",
+    "`background` 필드는 절대 변경해서는 안 됩니다. 원래 값을 유지하세요.",
+    "`appearance` 필드는 이벤트에서 장비(예: 새 갑옷)나 눈에 띄는 신체 상태(예: 부상)의 변화를 명시적으로 언급하는 경우에만 업데이트하세요."
+  ],
+  "relationship_rule_default": "`relationships` 필드는 변경해서는 안 됩니다. 특정 지침이 제공되지 않았으므로 원래 값을 유지하세요."
+}

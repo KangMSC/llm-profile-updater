@@ -1,4 +1,6 @@
 const axios = require('axios');
+const fs = require('fs').promises;
+const path = require('path');
 const { openRouter, stableDiffusion } = require('./config');
 
 const client = axios.create({
@@ -8,6 +10,21 @@ const client = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Helper function to read prompt files
+async function getPrompt(fileName) {
+  const filePath = path.join(__dirname, '..', 'prompts', fileName);
+  return fs.readFile(filePath, 'utf-8');
+}
+
+// Helper function to substitute placeholders
+function substitutePrompt(template, values) {
+  let prompt = template;
+  for (const [key, value] of Object.entries(values)) {
+    prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value);
+  }
+  return prompt;
+}
 
 async function updateCharacterProfile(characterName, events, existingProfileJson, instructions, customKeys = []) {
   const formattedEvents = events.map(event => {
@@ -23,64 +40,46 @@ async function updateCharacterProfile(characterName, events, existingProfileJson
     return `- ${eventDetails}`;
   }).join('\n\n');
 
-  // --- Global Rules ---
-  const globalRules = [
-    'For the fields `summary`, `interject_summary`, `personality`, `occupation`, `skills`, and `speech_style`, do not just add new text. Subtly modify the existing content only if the new events cause a significant change. Keep descriptions concise.',
-    'The `background` field MUST NOT be changed. Keep its original value.',
-    'Only update the `appearance` field if events explicitly mention a change in equipment (e.g., new armor) or visible physical state (e.g., injury).'
-  ];
+  const rulesJson = await getPrompt('global_rules.json');
+  const rules = JSON.parse(rulesJson);
+  let globalRules = [...rules.base_rules];
 
-  // Programmatically add the relationship rule if no specific instruction is given
   if (!instructions || !instructions.relationships) {
-    globalRules.push('The `relationships` field MUST NOT be changed. Keep its original value as no specific instructions were provided for it.');
+    globalRules.push(rules.relationship_rule_default);
   }
 
-  const globalRulesString = `\n\n**GLOBAL RULES**\nYou must follow these global rules for updating the profile:\n- ${globalRules.join('\n- ')}`;
+  const globalRulesString = `- ${globalRules.join('\n- ')}`;
 
-  // --- Character-Specific Instructions ---
   const instructionsString = instructions && Object.keys(instructions).length > 0
-    ? `\n\n**CHARACTER-SPECIFIC INSTRUCTIONS**\nWhen updating the profile, you MUST also follow these character-specific instructions:\n${Object.entries(instructions).map(([field, instruction]) => `- For the '${field}' field: ${instruction}`).join('\n')}`
+    ? `\n\n**캐릭터별 지침**\n프로필 업데이트 시, 다음 캐릭터별 지침도 반드시 따라야 합니다:\n${Object.entries(instructions).map(([field, instruction]) => `- '${field}' 필드: ${instruction}`).join('\n')}`
     : '';
 
   const customKeysString = customKeys && customKeys.length > 0
-    ? `\n\n**USER-DEFINED CUSTOM FIELDS**\nThe following fields were specially defined by the user: [${customKeys.join(', ')}]. Pay close attention to these fields, ensuring their content is creative, detailed, and reflects the character's unique identity.`
+    ? `\n\n**사용자 정의 커스텀 필드**\n사용자가 특별히 정의한 필드: [${customKeys.join(', ')}]. 이 필드들의 내용이 창의적이고 상세하며 캐릭터의 고유한 정체성을 반영하도록 특히 주의를 기울여야 합니다.`
     : '';
 
   const profile = JSON.parse(existingProfileJson);
-  const requiredKeys = Object.keys(profile);
+  const requiredKeys = Object.keys(profile).join('\n- ');
 
-  const prompt = `
-Here is the existing JSON profile for the character '${characterName}'. It may contain default fields and new custom fields.
+  const systemPromptTemplate = await getPrompt('system_update_profile.txt');
+  const userPromptTemplate = await getPrompt('user_update_profile.txt');
 
-\`\`\`json
-${existingProfileJson}
-\`\`\`
-
-Here are the new events that have occurred to this character since the last update:
-
-${formattedEvents}
-
-${globalRulesString}
-${instructionsString}
-${customKeysString}
-
-Based on the new events and ALL instructions provided (both global and specific), update the values for all keys in the JSON profile.
-If a field has an instruction, generate the content for it based on the instruction.
-If a value doesn't need changing, keep the original.
-Your task is to output the complete, updated JSON object, and nothing else.
-
-Always respond in Korean.
-
-The final JSON object must include all of the following keys, and only these keys:
-- ${requiredKeys.join('\n- ')}
-  `;
+  const userPrompt = substitutePrompt(userPromptTemplate, {
+    characterName,
+    existingProfileJson,
+    formattedEvents,
+    globalRulesString,
+    instructionsString,
+    customKeysString,
+    requiredKeys,
+  });
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant that updates a character\'s JSON profile in Korean based on new events. You must only output the raw, updated JSON object. The returned JSON must contain exactly the same keys as the original profile provided in the user prompt. Do not wrap the JSON in markdown ```json ... ```.' },
-        { role: 'user', content: prompt },
+        { role: 'system', content: systemPromptTemplate },
+        { role: 'user', content: userPrompt },
       ],
     });
     return response.data.choices[0].message.content;
@@ -104,48 +103,36 @@ async function generateCharacterDiary(characterName, events, profileJson, custom
     return `- ${eventDetails}`;
   }).join('\n\n');
 
-  const diaryDate = events[0]?.game_time_str.substring(events[0].game_time_str.indexOf(',') + 2) || 'Unknown Date';
+  const diaryDate = events[0]?.game_time_str.substring(events[0].game_time_str.indexOf(',') + 2) || '알 수 없는 날짜';
 
   const profileInfo = profileJson ? `
-Here is your character profile. Use this as a reference for your personality, background, and relationships when writing the diary entry:
+일기 작성 시 당신의 성격, 배경, 관계를 참고하기 위한 캐릭터 프로필입니다:
 
 \`\`\`json
 ${profileJson}
-\`\`\`
-` : '';
+\`\`\`` : '';
 
   const customKeysString = customKeys && customKeys.length > 0
-    ? `When writing, pay special attention to the following user-defined aspects of your profile: [${customKeys.join(', ')}]. Make sure your thoughts and feelings reflect these unique traits.`
+    ? `일기 작성 시, 당신의 프로필 중 사용자가 정의한 다음 측면에 특히 주의를 기울이세요: [${customKeys.join(', ')}]. 당신의 생각과 감정이 이러한 독특한 특성을 반영하도록 하세요.`
     : '';
 
-  const prompt = `
-You are the character '${characterName}'. I will provide you with a sequence of events that happened to you on a specific day.
-Your task is to write a personal and reflective diary entry in the first person ("I", "me", "my").
-The diary should be written entirely in Korean.
-Do not simply list the events. Instead, weave them into a narrative, describing your feelings, thoughts, and reactions to what happened.
-The tone of the diary should reflect your personality as suggested by your actions, dialogues, and internal thoughts within the events.
-${profileInfo}
-${customKeysString}
+  const systemPromptTemplate = await getPrompt('system_generate_diary.txt');
+  const userPromptTemplate = await getPrompt('user_generate_diary.txt');
 
-**IMPORTANT FORMATTING RULES:**
-1. The entire output must be a simple HTML snippet.
-2. Start with a heading for the date: <h4>${diaryDate}</h4>
-3. Write each paragraph of the diary inside its own <p> tag.
-4. Do NOT include <html>, <body>, or <head> tags. Only output the <h4> and <p> tags.
-
-Here are the events of your day:
-
-${formattedEvents}
-
-Now, write your diary entry for this day in the specified HTML format.
-  `;
+  const userPrompt = substitutePrompt(userPromptTemplate, {
+      characterName,
+      profileInfo,
+      customKeysString,
+      diaryDate,
+      formattedEvents
+  });
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are a character in a video game writing a diary entry in Korean. You must only output the diary text as a raw HTML snippet, using <h4> for the title and <p> tags for paragraphs.' },
-        { role: 'user', content: prompt },
+        { role: 'system', content: systemPromptTemplate },
+        { role: 'user', content: userPrompt },
       ],
     });
     return response.data.choices[0].message.content;
@@ -155,55 +142,9 @@ Now, write your diary entry for this day in the specified HTML format.
   }
 }
 
-async function generateCharacterImage(prompt) {
-  // Add quality modifiers to the user prompt
-  const enhancedPrompt = `${prompt}, digital painting, portrait, fantasy art, detailed, high quality, sharp focus`;
-
-  const requestPayload = {
-    model: openRouter.imageModel,
-    messages: [
-      { role: 'user', content: enhancedPrompt }
-    ],
-  };
-
-  try {
-    const response = await client.post('/chat/completions', requestPayload);
-
-    // CORRECTED PARSING: The image URL is in a non-standard 'images' field for this model.
-    if (response.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url) {
-      const dataUrl = response.data.choices[0].message.images[0].image_url.url;
-
-      console.log('[Image Gen LLM] Received data URL from OpenRouter.');
-
-      const parts = dataUrl.split(',');
-      if (parts.length === 2 && parts[0].startsWith('data:image')) {
-        const base64Data = parts[1];
-        if (!base64Data) {
-            throw new Error('Extracted base64 data is empty.');
-        }
-        return base64Data;
-      }
-      
-      throw new Error(`Unexpected data URL format: ${dataUrl.substring(0, 100)}...`);
-
-    } else {
-      // If the expected structure isn't there, log the whole response for debugging.
-      console.error('[Image Gen LLM] Failed to find image URL in response:', JSON.stringify(response.data, null, 2));
-      throw new Error('No image data found in the expected location in OpenRouter response.');
-    }
-  } catch (error) {
-    if (error.response) {
-        console.error('[Image Gen LLM] Full error response from OpenRouter:', JSON.stringify(error.response.data, null, 2));
-    }
-    console.error('Error calling OpenRouter Image API:', error.message);
-    throw error;
-  }
-}
-
 async function generateSdPrompt(profileJson) {
   const profile = JSON.parse(profileJson);
 
-  // Extract key descriptive fields for the prompt
   const relevantInfo = {
     appearance: profile.appearance,
     personality: profile.personality,
@@ -211,40 +152,24 @@ async function generateSdPrompt(profileJson) {
     summary: profile.summary,
   };
 
-  const prompt = `
-    You are an expert Stable Diffusion prompt engineer. Your task is to convert a character profile written in Korean into a high-quality, concise, comma-separated list of keywords in English for generating an image.
+  const systemPromptTemplate = await getPrompt('system_generate_sd_prompt.txt');
+  const userPromptTemplate = await getPrompt('user_generate_sd_prompt.txt');
 
-    **RULES:**
-    1.  Translate all concepts and descriptions from Korean to English.
-    2.  Focus on visual details: physical appearance, clothing, equipment, and overall mood.
-    3.  Break down sentences into individual keywords or short phrases (e.g., "She has long blonde hair" becomes "long hair, blonde hair").
-    4.  Start with general quality tags.
-    5.  Prioritize keywords from the 'appearance' field.
-    6.  Do NOT include any explanations, only the final comma-separated prompt.
-
-    **Character Profile:**
-    \`\`\`json
-    ${JSON.stringify(relevantInfo, null, 2)}
-    \`\`\`
-
-    **Example Output:**
-    masterpiece, best quality, 1girl, solo, blonde hair, long hair, noble face, beautiful, detailed eyes, embroidered light armor, holding greatsword, determined expression, fantasy setting
-
-    Now, generate the prompt for the provided character profile.
-  `;
+  const userPrompt = substitutePrompt(userPromptTemplate, {
+      relevantInfo: JSON.stringify(relevantInfo, null, 2)
+  });
 
   try {
     const response = await client.post('/chat/completions', {
-      model: openRouter.model, // Use the general text model
+      model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant that generates a comma-separated Stable Diffusion prompt in English from a JSON character profile. You only output the prompt keywords.' },
-        { role: 'user', content: prompt },
+        { role: 'system', content: systemPromptTemplate },
+        { role: 'user', content: userPrompt },
       ],
     });
 
     let sdPrompt = response.data.choices[0].message.content;
 
-    // Append LoRA if it's configured
     if (stableDiffusion.lora) {
       sdPrompt += `, <lora:${stableDiffusion.lora}:1>`;
     }
@@ -258,55 +183,35 @@ async function generateSdPrompt(profileJson) {
 
 async function generateInitialProfile(characterName, userPrompt, allKeys, customKeys = []) {
   const customKeysString = customKeys && customKeys.length > 0
-    ? `\n\n**USER-DEFINED CUSTOM FIELDS**\nThe following fields were specially defined by the user: [${customKeys.join(', ')}]. Pay close attention to these fields, ensuring their content is creative, detailed, and reflects the character's unique identity.`
+    ? `\n\n**사용자 정의 커스텀 필드**\n사용자가 특별히 정의한 필드: [${customKeys.join(', ')}]. 이 필드들의 내용이 창의적이고 상세하며 캐릭터의 고유한 정체성을 반영하도록 특히 주의를 기울여야 합니다.`
     : '';
 
-  const prompt = `
-    You are a world-class fantasy writer. Your task is to create a detailed character profile for a new character in a fantasy world.
-    The character's name is "${characterName}".
-    The user has provided the following initial description or keywords:
-    "${userPrompt}"
+  const systemPromptTemplate = await getPrompt('system_generate_initial_profile.txt');
+  const userPromptTemplate = await getPrompt('user_generate_initial_profile.txt');
 
-    Based on this, generate a complete and coherent character profile as a JSON object.
-    The JSON object MUST contain all of the following keys, and only these keys:
-    - ${allKeys.join('\n    - ')}
-
-    **Instructions for Content:**
-    - All field values must be in Korean.
-    - **summary**: A brief, one-paragraph summary of the character.
-    - **interject_summary**: A very short summary (1-2 sentences) of how the character might interrupt or add to a conversation.
-    - **background**: The character's history and backstory.
-    - **personality**: Key personality traits.
-    - **appearance**: Detailed physical appearance, including clothing and equipment.
-    - **aspirations**: The character's goals and dreams.
-    - **relationships**: An array of objects, each with 'name' and 'status' keys (e.g., { "name": "Elara", "status": "Childhood friend" }). If none, use an empty array \`[]\`.
-    - **occupation**: The character's job or primary role.
-    - **skills**: An array of key skills or abilities (e.g., ["Swordsmanship", "Alchemy"]). If none, use an empty array \`[]\`.
-    - **speech_style**: A description of how the character speaks.
-    - For any other custom fields, generate appropriate content based on the field name and the user's prompt.
-    ${customKeysString}
-
-    Your output MUST be only the raw JSON object, without any surrounding text or markdown formatting.
-  `;
+  const finalPrompt = substitutePrompt(userPromptTemplate, {
+      characterName,
+      userPrompt,
+      allKeys: allKeys.join('\n- '),
+      customKeysString
+  });
 
   try {
     const response = await client.post('/chat/completions', {
       model: openRouter.model,
       messages: [
-        { role: 'system', content: 'You are an AI assistant that generates a character\'s JSON profile in Korean. You must only output the raw JSON object. The returned JSON must contain exactly the keys specified in the user prompt.' },
-        { role: 'user', content: prompt },
+        { role: 'system', content: systemPromptTemplate },
+        { role: 'user', content: finalPrompt },
       ],
     });
 
     let content = response.data.choices[0].message.content;
 
-    // Attempt to clean up markdown fences if they exist
     const jsonMatch = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
     if (jsonMatch && jsonMatch[1]) {
       content = jsonMatch[1];
     }
 
-    // Return the parsed object
     return JSON.parse(content);
 
   } catch (error) {
@@ -318,6 +223,46 @@ async function generateInitialProfile(characterName, userPrompt, allKeys, custom
   }
 }
 
+// This function is no longer actively used in the UI but is kept for potential future use.
+async function generateCharacterImage(prompt) {
+  const enhancedPrompt = `${prompt}, digital painting, portrait, fantasy art, detailed, high quality, sharp focus`;
+
+  const requestPayload = {
+    model: openRouter.imageModel,
+    messages: [
+      { role: 'user', content: enhancedPrompt }
+    ],
+  };
+
+  try {
+    const response = await client.post('/chat/completions', requestPayload);
+
+    if (response.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url) {
+      const dataUrl = response.data.choices[0].message.images[0].image_url.url;
+      console.log('[Image Gen LLM] Received data URL from OpenRouter.');
+      const parts = dataUrl.split(',');
+      if (parts.length === 2 && parts[0].startsWith('data:image')) {
+        const base64Data = parts[1];
+        if (!base64Data) {
+            throw new Error('Extracted base64 data is empty.');
+        }
+        return base64Data;
+      }
+      throw new Error(`Unexpected data URL format: ${dataUrl.substring(0, 100)}...`);
+    } else {
+      console.error('[Image Gen LLM] Failed to find image URL in response:', JSON.stringify(response.data, null, 2));
+      throw new Error('No image data found in the expected location in OpenRouter response.');
+    }
+  } catch (error) {
+    if (error.response) {
+        console.error('[Image Gen LLM] Full error response from OpenRouter:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.error('Error calling OpenRouter Image API:', error.message);
+    throw error;
+  }
+}
+
+
 module.exports = {
   updateCharacterProfile,
   generateCharacterDiary,
@@ -325,4 +270,3 @@ module.exports = {
   generateSdPrompt,
   generateInitialProfile,
 };
-
